@@ -37,7 +37,7 @@ COLLECTION_NAME = os.getenv("COLLECTION_NAME", "iwac_articles")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 EXTERNAL_API_KEY = os.getenv("EXTERNAL_API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3") # Default model for Ollama
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
 
 logger.info(f"Using LLM Provider: {LLM_PROVIDER}")
 logger.info(f"Using ChromaDB Host: {CHROMADB_HOST}:{CHROMADB_PORT}")

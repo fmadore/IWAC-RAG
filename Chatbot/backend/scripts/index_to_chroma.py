@@ -6,10 +6,18 @@ from chromadb.utils import embedding_functions
 from tqdm import tqdm
 from typing import List, Dict, Any
 
-# Download necessary NLTK resources
+# Download necessary NLTK resources for English (default) and French
 try:
     nltk.data.find('tokenizers/punkt')
 except nltk.downloader.DownloadError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('tokenizers/punkt/french.pickle')
+except nltk.downloader.DownloadError:
+    # punkt contains multiple languages, including French
+    # If the above fails, redownloading punkt might be needed
+    # Or specifically download french part if possible
+    print("Downloading NLTK punkt data (includes French)...")
     nltk.download('punkt')
 
 def process_article(article: Dict[str, Any], chunk_size: int = 512, overlap: int = 100) -> List[Dict[str, Any]]:
@@ -21,8 +29,13 @@ def process_article(article: Dict[str, Any], chunk_size: int = 512, overlap: int
     if not content:
         return []
     
-    # Use NLTK to split into sentences
-    sentences = nltk.sent_tokenize(content)
+    # Use NLTK to split into sentences, specifying French
+    try:
+        sentences = nltk.sent_tokenize(content, language='french')
+    except Exception as e:
+        print(f"Error tokenizing article {article.get('id', '')}: {e}. Falling back to default tokenization.")
+        # Fallback to default if French data isn't loaded or causes error
+        sentences = nltk.sent_tokenize(content)
     
     chunks = []
     current_chunk = ""
@@ -99,9 +112,12 @@ def index_articles(input_file: str, chroma_host: str, chroma_port: int, collecti
     """
     client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
     
-    # Use all-MiniLM-L6-v2 for embedding (a good balance of quality and speed)
+    # Use a multilingual model for embedding
+    # model_name = "all-MiniLM-L6-v2" # Old model
+    model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+    print(f"Using embedding model: {model_name}")
     embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
+        model_name=model_name
     )
     
     # Create or get collection
