@@ -29,17 +29,18 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Install sirv for serving static files
-RUN npm install -g sirv-cli
+# RUN npm install -g sirv-cli
 
 # Copy built assets from the builder stage
 # Adjust the source path if your SvelteKit adapter outputs elsewhere (e.g., adapter-static)
 COPY --from=builder /app/build .
 
+# Copy the package.json from the builder stage to ensure "type": "module" is set
+COPY --from=builder /app/package.json .
+
 # Expose the port the app runs on (default for SvelteKit node-adapter is 3000)
 EXPOSE 3000
 
-# Command to run the server
-# The entrypoint might differ based on your adapter (e.g., node-adapter uses 'node index.js')
-# This example uses sirv to serve the built static assets
-# CMD [ "node", "index.js" ] # Typical for node-adapter
-CMD [ "sirv", ".", "--host", "0.0.0.0", "--port", "3000" ] # Example using sirv for static adapter output 
+# Command to run the server built by adapter-node
+# The entrypoint is usually index.js in the build output directory
+CMD [ "node", "index.js" ] 
