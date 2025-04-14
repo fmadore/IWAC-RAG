@@ -1,5 +1,5 @@
 requests
-// tqdm - Removed as generate_summaries.py was deleted
+# tqdm - Removed as generate_summaries.py was deleted
 chromadb
 nltk
 sentence-transformers

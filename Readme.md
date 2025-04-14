@@ -28,21 +28,35 @@ Chatbot/
 └── frontend/
     ├── Dockerfile
     ├── package.json
+    ├── svelte.config.js
+    ├── vite.config.ts
+    ├── tailwind.config.ts
+    ├── postcss.config.js
+    ├── tsconfig.json
     ├── src/
+    │   ├── routes/
+    │   │   └── +page.svelte # Main UI page
     │   ├── components/
-    │   ├── pages/
-    │   └── api/
-    └── public/
+    │   │   ├── ChatMessage.svelte
+    │   │   ├── FilterPanel.svelte
+    │   │   └── SourcePanel.svelte
+    │   └── app.html       # Main HTML shell
+    └── static/
 ```
-*Note: Empty directories like `backend/app/data_processing`, `backend/app/rag`, `backend/app/utils`, `data/raw` were removed from this diagram as they are likely unused with the simplified workflow.* 
+*Note: Simplified structure shown. Actual frontend has more config files (ESLint, Prettier, etc.).*
 
 ### 1.3 Docker Setup
 - [x] Create `docker-compose.yml` file (basic structure)
+- [x] Create `Chatbot/backend/Dockerfile`
+- [x] Create `Chatbot/frontend/Dockerfile` (template, may need adjustments)
+- [x] Create `Chatbot/ollama/Dockerfile` (basic)
 - [ ] Configure environment variables in `.env` file
 
 ## 2. Data Processing (Simplified)
 
 ### 2.1 Input Data Preparation (Pre-requisite)
+- [x] Define expected input JSON structure.
+- [x] Create mock `input_articles.json` file.
 - The system expects a pre-processed JSON file located in `Chatbot/data/processed/` (e.g., `input_articles.json`).
 - Each object in the JSON array should have the following structure:
   ```json
@@ -78,7 +92,7 @@ Chatbot/
 
 ### 3.2 Language Model Configuration
 - **Option 1: Local Ollama Setup**
-  - [ ] Create a Dockerfile for Ollama (`Chatbot/ollama/Dockerfile`)
+  - [x] Create a Dockerfile for Ollama (`Chatbot/ollama/Dockerfile` - basic)
   - [ ] Pull appropriate models (manual step or in Dockerfile)
   - [ ] Configure model parameters (basic options in `api.py`)
 - **Option 2: External LLM API Setup**
@@ -106,10 +120,12 @@ Chatbot/
 ## 4. Web Interface Development
 
 ### 4.1 Frontend Framework Setup
-- [ ] Set up Svelte with SvelteKit:
-  - [ ] Project initialization (`npm create svelte@latest .` or similar in `Chatbot/frontend`)
+- [x] Set up Svelte with SvelteKit:
+  - [x] Project initialization (using `npm create svelte@latest .`)
   - [x] Component structure (basic files created)
   - [x] API integration (fetch calls in `+page.svelte`)
+  - [x] Add Tailwind CSS (via `svelte-add`)
+  - [x] Add Tailwind plugins (`@tailwindcss/typography`, `@tailwindcss/forms`)
   - [ ] Responsive design foundation (requires Tailwind/CSS setup)
 
 ### 4.2 UI Components
@@ -143,71 +159,9 @@ Chatbot/
 
 ### 5.2 Docker Compose Configuration
 - [x] Create `docker-compose.yml` with services (ollama, chromadb, backend, frontend)
-
-```yaml
-# docker-compose.yml example structure
-version: '3.8'
-
-services:
-  ollama:
-    build: ./ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    ports:
-      - "11434:11434"
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 16G
-
-  chromadb:
-    image: ghcr.io/chroma-core/chroma:latest
-    volumes:
-      - chroma_data:/chroma/data
-    environment:
-      - CHROMA_DB_IMPL=duckdb+parquet
-      - PERSIST_DIRECTORY=/chroma/data
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-
-  backend:
-    build: ./backend
-    depends_on:
-      - ollama
-      - chromadb
-    volumes:
-      # Mount processed data for indexing script and potentially API (if needed)
-      - ./data/processed:/app/data/processed 
-      # Optionally mount entire data dir if needed
-      # - ./data:/app/data
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - CHROMADB_HOST=chromadb
-      - CHROMADB_PORT=8000
-      - LLM_PROVIDER=ollama
-      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
-    ports:
-      - "5000:5000"
-    restart: unless-stopped
-
-  frontend:
-    build: ./frontend
-    depends_on:
-      - backend
-    ports:
-      - "3000:3000"
-    environment:
-      - API_URL=http://backend:5000 # Adjust if Nginx is used
-      - VITE_API_URL=http://localhost:5000 # For local dev, ensure matches API port
-    restart: unless-stopped
-
-volumes:
-  ollama_data:
-  chroma_data:
-```
-*Note: Adjusted backend volume mount and added VITE_API_URL for frontend.* 
+- This file defines and configures the different services (containers) that make up the application: Ollama, ChromaDB, the Python backend, and the SvelteKit frontend.
+- It manages their build process, dependencies, volumes (for persistent data), environment variables, and networking.
+- Refer to the `Chatbot/docker-compose.yml` file in the repository for the complete configuration details.
 
 ### 5.3 Nginx Configuration for Production
 - [ ] Set up Nginx as reverse proxy:
@@ -244,35 +198,35 @@ volumes:
 ## 7. Code Examples and Implementation Notes
 
 ### 7.1 ChromaDB Indexing Script (`index_to_chroma.py`)
-- This script reads the pre-processed JSON file (e.g., `data/processed/input_articles.json`).
-- It iterates through each article, chunks the `content` using NLTK sentence tokenization.
-- It maps the `subject` and `spatial` fields from the JSON to `subjects` and `locations` metadata fields.
-- It generates embeddings using a SentenceTransformer model (`all-MiniLM-L6-v2` by default).
-- It adds the chunks, embeddings, and metadata to the specified ChromaDB collection.
-- **Run using:** `docker-compose run --rm backend python app/scripts/index_to_chroma.py --input data/processed/input_articles.json --chroma-host chromadb` (adjust input path and other args if needed).
+- [x] This script reads the pre-processed JSON file (e.g., `data/processed/input_articles.json`).
+- [x] It iterates through each article, chunks the `content` using NLTK sentence tokenization.
+- [x] It maps the `subject` and `spatial` fields from the JSON to `subjects` and `locations` metadata fields.
+- [x] It generates embeddings using a SentenceTransformer model (`all-MiniLM-L6-v2` by default).
+- [x] It adds the chunks, embeddings, and metadata to the specified ChromaDB collection.
+- [x] **Run using:** `docker-compose run --rm backend python app/scripts/index_to_chroma.py --input data/processed/input_articles.json --chroma-host chromadb` (adjust input path and other args if needed).
 
 *(Code example for index_to_chroma.py - see `Chatbot/backend/scripts/index_to_chroma.py`)*
 
 ### 7.2 RAG API Implementation (`api.py`)
-- Provides the core backend logic using FastAPI.
-- `/query` endpoint:
+- [x] Provides the core backend logic using FastAPI.
+- [x] `/query` endpoint:
     - Takes a user query and optional filters.
     - Queries the ChromaDB collection for relevant text chunks.
     - Constructs a context from the retrieved chunks.
     - Sends the context and query to the configured LLM (Ollama or external API).
     - Returns the LLM's answer and source information.
-- `/filters` endpoint:
+- [x] `/filters` endpoint:
     - Queries ChromaDB metadata to find unique values for filtering (newspapers, locations, subjects, date range).
     - Returns these options for the frontend filter panel.
 
 *(Code example for api.py - see `Chatbot/backend/app/api.py`)*
 
 ### 7.3 Frontend UI with Svelte (`+page.svelte` and components)
-- Main SvelteKit page (`src/routes/+page.svelte`) orchestrates the UI.
-- `ChatMessage.svelte`: Displays individual user and assistant messages.
-- `FilterPanel.svelte`: Allows users to select filters based on options fetched from the `/filters` endpoint.
-- `SourcePanel.svelte`: Displays the source documents related to the assistant's answer.
-- Communicates with the backend API via fetch requests to `/query` and `/filters` using the `VITE_API_URL` environment variable.
+- [x] Main SvelteKit page (`src/routes/+page.svelte`) orchestrates the UI.
+- [x] `ChatMessage.svelte`: Displays individual user and assistant messages.
+- [x] `FilterPanel.svelte`: Allows users to select filters based on options fetched from the `/filters` endpoint.
+- [x] `SourcePanel.svelte`: Displays the source documents related to the assistant's answer.
+- [x] Communicates with the backend API via fetch requests to `/query` and `/filters` using the `VITE_API_URL` environment variable.
 
 *(Code example for +page.svelte and components - see `Chatbot/frontend/src/...`)*
 

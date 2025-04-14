@@ -1,11 +1,16 @@
 # Use the official Ollama image
 FROM ollama/ollama:latest
 
+# Copy the custom entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+# Ensure it has execute permissions within the image (important for Linux containers)
+RUN chmod +x /entrypoint.sh
+
 # The base image already sets up Ollama and exposes port 11434.
 # No further configuration needed here for a basic setup.
 
-# Optional: If you want to pull models during build time, uncomment and add RUN commands:
-# RUN ollama pull llama3
-# RUN ollama pull mistral
+# Set the custom entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
 
-# The default entrypoint and command from the base image will start Ollama. 
+# Models will be pulled by the entrypoint script after the container starts.
+# Default CMD from base image is overridden by the entrypoint. 
