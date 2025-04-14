@@ -14,7 +14,8 @@ WORKDIR /app
 # Install NLTK data (needed for index_to_chroma.py)
 # We run this separately as it downloads data, not just installs packages
 RUN pip install --no-cache-dir nltk && \
-    python -m nltk.downloader punkt
+    python -m nltk.downloader punkt && \
+    python -m nltk.downloader punkt_tab
 
 # Install Python dependencies
 # Copy only the requirements file first to leverage Docker cache
