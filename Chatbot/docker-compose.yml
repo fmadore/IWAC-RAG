@@ -1,0 +1,57 @@
+# docker-compose.yml example structure
+version: '3.8'
+
+services:
+  ollama:
+    build: ./ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+
+  chromadb:
+    image: ghcr.io/chroma-core/chroma:latest
+    volumes:
+      - chroma_data:/chroma/data
+    environment:
+      - CHROMA_DB_IMPL=duckdb+parquet
+      - PERSIST_DIRECTORY=/chroma/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    depends_on:
+      - ollama
+      - chromadb
+    volumes:
+      - ./data:/app/data
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - LLM_PROVIDER=ollama
+      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://backend:5000
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  chroma_data: 
