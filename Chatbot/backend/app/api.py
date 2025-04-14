@@ -223,7 +223,7 @@ def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_c
                     newspaper=metadata.get("newspaper"),
                     date=metadata.get("date"),
                     # url=metadata.get("url"), # Need to ensure URL is stored in metadata
-                    text_snippet=doc[:250] + "..." if len(doc) > 250 else doc # Slightly longer snippet
+                    text_snippet=doc[:500] + "..." if len(doc) > 500 else doc # Longer snippet (500 chars)
                 ))
         else:
             logger.warning("No results found in ChromaDB for the query.")
@@ -249,9 +249,10 @@ def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_c
 
                 prompt = f"""
                 You are a helpful assistant for the Islam West Africa Collection (IWAC).
-                Answer the user's question based ONLY on the information provided in the context below.
-                Provide a concise answer. If the answer cannot be found in the context, state that clearly.
-                Do not mention the context in your answer.
+                Your task is to answer the user's question based *only* on the information contained in the following context documents.
+                Read the context carefully and synthesize a coherent, analytical answer in your own words.
+                Do not simply quote passages from the context unless it is essential for clarity. If the information needed to answer the question is not present in the context, state that clearly.
+                Keep your answer concise. Do not refer to the context documents themselves in your response.
                 
                 Context:
                 {context_text}
@@ -291,9 +292,10 @@ def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_c
                 # Construct prompt for RAG
                 prompt = f"""
                 You are a helpful assistant for the Islam West Africa Collection (IWAC).
-                Answer the user's question based ONLY on the information provided in the context below.
-                Provide a concise answer. If the answer cannot be found in the context, state that clearly.
-                Do not mention the context in your answer.
+                Your task is to answer the user's question based *only* on the information contained in the following context documents.
+                Read the context carefully and synthesize a coherent, analytical answer in your own words.
+                Do not simply quote passages from the context unless it is essential for clarity. If the information needed to answer the question is not present in the context, state that clearly.
+                Keep your answer concise. Do not refer to the context documents themselves in your response.
                 
                 Context:
                 {context_text}

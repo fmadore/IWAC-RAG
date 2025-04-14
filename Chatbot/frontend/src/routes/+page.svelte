@@ -148,19 +148,19 @@
 </script>
 
 <!-- Basic HTML Structure -->
-<!-- Assumes TailwindCSS or similar utility classes are set up -->
-<main class="flex flex-col h-screen max-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-  <header class="bg-blue-700 text-white p-4 shadow-md flex-shrink-0">
+<main class="flex flex-col h-screen max-h-screen bg-secondary-light dark:bg-dark-bg text-gray-900 dark:text-dark-text font-sans">
+  <header class="bg-primary dark:bg-primary-dark text-white p-4 shadow-lg flex-shrink-0 z-10">
     <div class="container mx-auto flex justify-between items-center">
-      <h1 class="text-xl font-bold">Islam West Africa Collection (IWAC) ChatBot</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">IWAC ChatBot</h1>
       <button 
         on:click={() => showFilters = !showFilters}
-        class="px-3 py-1 bg-blue-600 hover:bg-blue-800 rounded flex items-center transition-colors"
+        class="px-4 py-2 bg-primary-dark dark:bg-primary text-white rounded-md hover:bg-opacity-90 dark:hover:bg-opacity-90 flex items-center transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-primary-dark"
         aria-label="Toggle Filters"
         aria-expanded={showFilters}
       >
-        <!-- Using a simple text icon for now -->
-        <span class="mr-1">☰</span> 
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+        </svg>
         Filters
       </button>
     </div>
@@ -169,7 +169,7 @@
   <div class="flex flex-1 overflow-hidden">
     <!-- Filter sidebar -->
     {#if showFilters}
-      <aside class="w-64 bg-white dark:bg-gray-800 shadow-md p-4 overflow-y-auto flex-shrink-0 border-r dark:border-gray-700">
+      <aside class="w-72 bg-white dark:bg-dark-surface shadow-lg p-5 overflow-y-auto flex-shrink-0 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out">
         <FilterPanel 
           options={filterOptions} 
           currentFilters={activeFilters} 
@@ -182,22 +182,24 @@
     {/if}
     
     <!-- Main content -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="flex-1 flex flex-col overflow-hidden min-w-0 bg-secondary-light dark:bg-dark-bg">
       <!-- Chat messages -->
-      <div class="flex-1 overflow-y-auto p-4 space-y-4" aria-live="polite">
+      <div class="flex-1 overflow-y-auto p-6 space-y-5" aria-live="polite">
         {#each messages as message, i (message.role + i)} <!-- Basic keying -->
           <ChatMessage {message} />
         {:else}
-          <!-- Welcome Message -->
-          <div class="h-full flex items-center justify-center text-center text-gray-500 dark:text-gray-400">
-            <div>
-              <h2 class="text-2xl font-semibold mb-3">Welcome to the IWAC ChatBot</h2>
-              <p class="max-w-md mx-auto">
-                Ask questions about Islam and Muslims in West Africa based on our collection
-                of newspaper articles.
+          <!-- Enhanced Welcome Message -->
+          <div class="h-full flex flex-col items-center justify-center text-center text-gray-500 dark:text-dark-text-secondary p-8">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+             </svg>
+              <h2 class="text-3xl font-semibold mb-4 text-gray-800 dark:text-dark-text">Welcome to the IWAC ChatBot</h2>
+              <p class="max-w-lg mx-auto text-base mb-6">
+                Explore insights on Islam and Muslims in West Africa through our digitized newspaper collection.
               </p>
-              <p class="mt-4 text-sm">Use the input below to start chatting, or open the filters panel to refine your search.</p>
-            </div>
+              <p class="text-sm">
+                Start by typing your question below, or use the <button class="text-primary hover:underline font-medium" on:click={() => showFilters = !showFilters}>Filters</button> panel to narrow your search.
+              </p>
           </div>
         {/each}
         
@@ -210,22 +212,25 @@
       </div>
       
       <!-- Input area -->
-      <div class="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 flex-shrink-0">
-        <form on:submit|preventDefault={submitQuery} class="flex gap-2">
+      <div class="border-t border-gray-200 dark:border-gray-600 p-4 bg-white dark:bg-dark-surface flex-shrink-0 shadow-up">
+        <form on:submit|preventDefault={submitQuery} class="flex items-center gap-3 max-w-4xl mx-auto">
           <input 
             type="text" 
             bind:value={query} 
-            placeholder="Ask a question..." 
-            class="flex-1 p-2 border border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Ask about the collection..." 
+            class="flex-1 form-input px-4 py-3 border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm transition-all"
             disabled={isLoading}
             aria-label="Chat input"
           />
           <button 
             type="submit" 
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
+            class="px-6 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-dark-surface disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-200 shadow-sm flex items-center justify-center"
             disabled={isLoading || !query.trim()}
           >
-            Send
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 {isLoading ? 'hidden' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+             </svg>
+             {isLoading ? 'Thinking...' : 'Send'}
           </button>
         </form>
       </div>
@@ -233,7 +238,7 @@
     
     <!-- Sources panel -->
     {#if sources.length > 0}
-      <aside class="w-80 bg-white dark:bg-gray-800 shadow-md p-4 overflow-y-auto flex-shrink-0 border-l dark:border-gray-700">
+       <aside class="w-80 bg-white dark:bg-dark-surface shadow-lg p-5 overflow-y-auto flex-shrink-0 border-l border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out">
         <SourcePanel {sources} />
       </aside>
     {/if}
@@ -241,10 +246,13 @@
 </main>
 
 <style>
-  /* Basic CSS for loader - assumes no external CSS library is fully set up */
+  /* Fallback for font */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+  /* Update loader to use primary color */
   .loader {
-    border: 4px solid #f3f3f3; /* Light grey */
-    border-top: 4px solid #3498db; /* Blue */
+    border: 4px solid rgba(var(--color-primary-DEFAULT), 0.2); /* Use primary color with alpha */
+    border-top-color: rgb(var(--color-primary-DEFAULT)); /* Use solid primary color */
     border-radius: 50%;
     width: 30px;
     height: 30px;
@@ -252,19 +260,25 @@
   }
   
   @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    to { transform: rotate(360deg); }
   }
 
-  /* Ensure main layout uses full height */
+  /* Ensure main layout uses full height and applies font */
   main {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    font-family: 'Inter', sans-serif; /* Example font - ensure it's loaded */
+    scroll-behavior: smooth;
   }
 
-  /* Allow content area to scroll */
-  .flex-1.overflow-y-auto {
-    flex-grow: 1;
+  /* Custom shadow for input area */
+  .shadow-up {
+     box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -2px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Add smooth scrolling */
+  .overflow-y-auto {
+    scroll-behavior: smooth;
   }
 </style>
