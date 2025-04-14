@@ -48,6 +48,18 @@ else:
     logger.info(f"Using External Model: {MODEL_NAME}")
 logger.info(f"Using Embedding Model: {EMBEDDING_MODEL_NAME}")
 
+# Initialize embedding function once at startup
+try:
+    logger.info(f"Initializing embedding function: {EMBEDDING_MODEL_NAME}...")
+    _embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=EMBEDDING_MODEL_NAME
+    )
+    logger.info("Embedding function initialized successfully.")
+except Exception as e:
+    logger.error(f"Failed to initialize embedding function: {e}")
+    # Depending on criticality, you might want to raise an exception or exit
+    _embedding_function = None 
+
 # Connect to ChromaDB
 # Use a singleton pattern or dependency injection for production
 _chroma_client = None
@@ -68,10 +80,11 @@ def get_chroma_client():
     return _chroma_client
 
 def get_embedding_function():
-    # Cache the embedding function object
-    return embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name=EMBEDDING_MODEL_NAME
-    )
+    # Return the pre-initialized embedding function
+    if _embedding_function is None:
+        # This happens if initialization failed at startup
+        raise HTTPException(status_code=500, detail="Embedding function could not be initialized.")
+    return _embedding_function
 
 def get_collection():
     global _collection
@@ -99,6 +112,7 @@ class QueryRequest(BaseModel):
     query: str
     filters: Optional[Dict[str, Any]] = None
     top_k: int = Field(default=5, ge=1, le=20) # Add validation for top_k
+    model_name: Optional[str] = None # Add optional model name
 
 class Source(BaseModel):
     id: str
@@ -145,7 +159,7 @@ def read_root():
 @app.post("/query", response_model=QueryResponse)
 def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_collection)):
     start_time = datetime.now()
-    logger.info(f"Received query: '{request.query}' with filters: {request.filters}")
+    logger.info(f"Received query: '{request.query}' with filters: {request.filters} and model: {request.model_name or MODEL_NAME}")
     
     try:
         # Prepare filters for ChromaDB query
@@ -229,6 +243,10 @@ def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_c
         
         try:
             if LLM_PROVIDER == "ollama":
+                # Determine which model to use
+                target_model = request.model_name if request.model_name else MODEL_NAME
+                logger.info(f"Using Ollama model: {target_model}")
+
                 prompt = f"""
                 You are a helpful assistant for the Islam West Africa Collection (IWAC).
                 Answer the user's question based ONLY on the information provided in the context below.
@@ -245,7 +263,7 @@ def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_c
                 response = requests.post(
                     f"{OLLAMA_BASE_URL}/api/generate",
                     json={
-                        "model": MODEL_NAME,
+                        "model": target_model, # Use the determined model name
                         "prompt": prompt,
                         "stream": False,
                         "temperature": 0.1,
@@ -260,11 +278,62 @@ def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_c
 
             elif LLM_PROVIDER == "gemini":
                 if not EXTERNAL_API_KEY:
-                    raise HTTPException(status_code=500, detail="Gemini API key not configured")
-                # Placeholder: Implement Gemini API Call
-                # Needs google-generativeai library
-                answer = f"[Gemini answer placeholder for query: {request.query}]" # Placeholder
-                logger.info("Gemini placeholder response generated.")
+                    raise HTTPException(status_code=500, detail="Gemini API key not configured in .env (EXTERNAL_API_KEY)")
+                
+                # Determine which model to use: request parameter or default
+                gemini_default_model = "gemini-2.0-flash" 
+                target_model = request.model_name if request.model_name else gemini_default_model
+                logger.info(f"Using Gemini model: {target_model}")
+                
+                # Construct API URL with the chosen model
+                gemini_api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={EXTERNAL_API_KEY}"
+                
+                # Construct prompt for RAG
+                prompt = f"""
+                You are a helpful assistant for the Islam West Africa Collection (IWAC).
+                Answer the user's question based ONLY on the information provided in the context below.
+                Provide a concise answer. If the answer cannot be found in the context, state that clearly.
+                Do not mention the context in your answer.
+                
+                Context:
+                {context_text}
+                
+                User question: {request.query}
+                
+                Answer:
+                """
+
+                request_payload = {
+                    "contents": [{
+                        "parts":[{"text": prompt}]
+                    }],
+                    # Add generation config if needed (temperature, etc.)
+                    # "generationConfig": {
+                    #     "temperature": 0.7,
+                    #     "maxOutputTokens": 1024
+                    # }
+                }
+                
+                logger.debug(f"Sending request to Gemini API: {gemini_api_url}")
+                response = requests.post(
+                    gemini_api_url,
+                    headers={'Content-Type': 'application/json'},
+                    json=request_payload,
+                    timeout=90 # Slightly longer timeout for external API
+                )
+                response.raise_for_status() # Raise exception for bad status codes (4xx, 5xx)
+                
+                result = response.json()
+                logger.debug(f"Received response from Gemini API: {result}")
+                
+                # Extract text - based on typical Gemini API response structure
+                try:
+                    answer = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+                except (KeyError, IndexError, TypeError) as e:
+                    logger.error(f"Failed to parse Gemini response: {result}. Error: {e}")
+                    raise HTTPException(status_code=500, detail="Failed to parse response from Gemini API")
+                    
+                logger.info("Gemini response received successfully.")
 
             elif LLM_PROVIDER == "openai":
                 if not EXTERNAL_API_KEY:

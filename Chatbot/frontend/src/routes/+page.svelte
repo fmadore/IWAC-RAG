@@ -10,6 +10,7 @@
   let sources = [];
   let activeFilters = {};
   let isLoading = false;
+  let selectedModel = 'gemma3:4b'; // Default model
   let filterOptions = {
     newspapers: [],
     locations: [],
@@ -65,7 +66,8 @@
       console.log("Query data:", JSON.stringify({
           query: userQuery,
           filters: Object.keys(activeFilters).length > 0 ? activeFilters : null, 
-          top_k: 5
+          top_k: 5,
+          model_name: selectedModel
         }));
 
       const response = await fetch(`${API_URL}/query`, {
@@ -75,7 +77,8 @@
           query: userQuery,
           // Send null if no filters are active, matching API expectation
           filters: Object.keys(activeFilters).length > 0 ? activeFilters : null, 
-          top_k: 5
+          top_k: 5,
+          model_name: selectedModel
         })
       });
       
@@ -135,6 +138,13 @@
      // Optionally re-submit query when filters reset?
     // submitQuery(); // If desired
   }
+  
+  // Handle model selection change
+  function handleModelChange(event) {
+    selectedModel = event.detail.model;
+    console.log("Model selected:", selectedModel);
+    // Potentially trigger a re-query or inform the user?
+  }
 </script>
 
 <!-- Basic HTML Structure -->
@@ -163,8 +173,10 @@
         <FilterPanel 
           options={filterOptions} 
           currentFilters={activeFilters} 
+          selectedModel={selectedModel}
           on:update={handleFilterUpdate} 
           on:reset={handleFilterReset} 
+          on:modelchange={handleModelChange}
         />
       </aside>
     {/if}

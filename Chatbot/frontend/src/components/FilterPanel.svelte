@@ -4,8 +4,10 @@
   // Props: 
   // options (object: { newspapers: [], locations: [], subjects: [], date_range: {min, max} })
   // currentFilters (object: reactive representation of active filters)
+  // selectedModel (string: the currently selected LLM model)
   export let options;
   export let currentFilters = {}; // Initialize as empty object
+  export let selectedModel = 'gemma3:4b'; // Default model passed from parent
 
   const dispatch = createEventDispatcher();
 
@@ -15,6 +17,15 @@
   let selectedNewspaper = currentFilters.newspaper || '';
   let selectedLocations = currentFilters.locations || [];
   let selectedSubjects = currentFilters.subjects || [];
+
+  // Available models (can be fetched or configured later)
+  const availableModels = [
+    { id: 'gemma3:4b', name: 'Ollama: Gemma3 4B' },
+    { id: 'deepseek-r1:7b', name: 'Ollama: Deepseek R1 7B' },
+    { id: 'gemini-2.0-flash', name: 'Gemini: 2.0 Flash' },
+    { id: 'gemini-pro', name: 'Gemini: Pro' },
+    // Add more models here as needed
+  ];
 
   function applyFilters() {
     const newFilters = {};
@@ -59,10 +70,27 @@
       selectedSubjects = currentFilters.subjects || [];
   }
 
+  // Reactive statement to dispatch model change event when selection changes
+  $: {
+    if (selectedModel) { // Ensure it has a value
+      dispatch('modelchange', { model: selectedModel });
+    }
+  }
+
 </script>
 
 <div class="p-2 space-y-4">
   <h3 class="text-lg font-semibold mb-3 border-b pb-2 dark:border-gray-600">Filters</h3>
+
+  <!-- Model Selection -->
+  <div>
+    <label for="model-select" class="block text-sm font-medium mb-1">Language Model</label>
+    <select id="model-select" bind:value={selectedModel} class="w-full p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600">
+      {#each availableModels as model}
+        <option value={model.id}>{model.name}</option>
+      {/each}
+    </select>
+  </div>
 
   <!-- Date Range -->
   <div>
