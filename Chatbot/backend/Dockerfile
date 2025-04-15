@@ -23,6 +23,10 @@ RUN pip install --no-cache-dir nltk && \
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Download the embedding model during the build
+# Ensure sentence-transformers is installed first (it should be in requirements.txt)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')"
+
 # Copy the rest of the backend application code into the container
 COPY . .
 

@@ -29,6 +29,12 @@ def process_article(article: Dict[str, Any], chunk_size: int = 512, overlap: int
     if not content:
         return []
     
+    # Pre-process content to handle different newline/paragraph break styles
+    content = content.replace('\\r\\n\\r\\n', ' ') # Replace double carriage return/newline
+    content = content.replace('\\n\\n', ' ')     # Replace double newline
+    content = content.replace('\\r\\n', ' ')    # Replace single carriage return/newline
+    content = content.replace('\\n', ' ')       # Replace single newline just in case
+    
     # Use NLTK to split into sentences, specifying French
     try:
         sentences = nltk.sent_tokenize(content, language='french')
