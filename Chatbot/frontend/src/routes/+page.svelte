@@ -97,7 +97,6 @@
       console.log("Query data:", JSON.stringify({
           query: userQuery,
           filters: Object.keys(activeFilters).length > 0 ? activeFilters : null, 
-          top_k: 5,
           model_name: selectedModel
         }));
 
@@ -108,7 +107,6 @@
           query: userQuery,
           // Send null if no filters are active, matching API expectation
           filters: Object.keys(activeFilters).length > 0 ? activeFilters : null, 
-          top_k: 5,
           model_name: selectedModel
         })
       });
