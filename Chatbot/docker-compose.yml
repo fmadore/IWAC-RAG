@@ -15,12 +15,15 @@ services:
           memory: 16G
 
   chromadb:
-    image: ghcr.io/chroma-core/chroma:latest
+    # image: ghcr.io/chroma-core/chroma:latest # Build from local Dockerfile instead
+    build: ./chromadb
     volumes:
       - chroma_data:/chroma/data
     environment:
       - CHROMA_DB_IMPL=duckdb+parquet
       - PERSIST_DIRECTORY=/chroma/data
+      # Add ANONYMIZED_TELEMETRY=False if you want to disable telemetry
+      # - ANONYMIZED_TELEMETRY=False 
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -43,12 +46,6 @@ services:
     ports:
       - "5000:5000"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:5000/docs"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   frontend:
     build: 
@@ -57,7 +54,7 @@ services:
         - VITE_API_URL=http://backend:5000
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "3000:3000"
     restart: unless-stopped

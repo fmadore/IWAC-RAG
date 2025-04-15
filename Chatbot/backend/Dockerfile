@@ -26,11 +26,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the backend application code into the container
 COPY . .
 
+# Make entrypoint script executable
+RUN chmod +x /app/entrypoint.sh
+
 # Expose the port the app runs on
 EXPOSE 5000
 
-# Define the command to run the application
-# Use the "reload" flag for development, remove it for production
-CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "5000"]
-# For development with reload:
-# CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "5000", "--reload"] 
+# Set the entrypoint script
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# CMD is no longer needed as the entrypoint handles starting the server
+# # Define the command to run the application
+# # Use the "reload" flag for development, remove it for production
+# CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "5000"]
+# # For development with reload:
+# # CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "5000", "--reload"] 
