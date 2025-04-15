@@ -9,7 +9,8 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies (if any are needed - e.g., for certain ML libraries)
-# RUN apt-get update && apt-get install -y --no-install-recommends <packages> && rm -rf /var/lib/apt/lists/*
+# Add curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Install NLTK data (needed for index_to_chroma.py)
 # We run this separately as it downloads data, not just installs packages
