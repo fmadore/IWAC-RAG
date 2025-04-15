@@ -23,6 +23,7 @@
 
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import YearSlider from './YearSlider.svelte';
 
   export let options: FilterOptions;
   export let currentFilters: Filters = {};
@@ -31,8 +32,8 @@
   const dispatch = createEventDispatcher();
 
   // Local state for inputs
-  let dateFrom = currentFilters.date_range?.from || '';
-  let dateTo = currentFilters.date_range?.to || '';
+  let filterStartYear: number | undefined;
+  let filterEndYear: number | undefined;
   let selectedNewspaper = currentFilters.newspaper || '';
   let selectedLocations = currentFilters.locations || [];
   let selectedSubjects = currentFilters.subjects || [];
@@ -46,13 +47,68 @@
     // Add more models here as needed
   ];
 
+  // Helper function to get year from date string (YYYY-MM-DD)
+  function getYearFromDate(dateString?: string): number | undefined {
+    if (!dateString) return undefined;
+    try {
+      // Ensure valid date format before parsing
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return undefined;
+      const year = new Date(dateString + 'T00:00:00Z').getUTCFullYear(); // Use UTC to avoid timezone issues
+      return isNaN(year) ? undefined : year;
+    } catch (e) {
+      return undefined;
+    }
+  }
+
+  // Calculate min/max years for the slider from options
+  let minSliderYear: number | undefined;
+  let maxSliderYear: number | undefined;
+  $: {
+    minSliderYear = getYearFromDate(options.date_range?.min);
+    maxSliderYear = getYearFromDate(options.date_range?.max);
+    // Initialize filter years if they are undefined and slider bounds are known
+    if (filterStartYear === undefined && minSliderYear !== undefined) {
+        filterStartYear = minSliderYear;
+    }
+    if (filterEndYear === undefined && maxSliderYear !== undefined) {
+        filterEndYear = maxSliderYear;
+    }
+  }
+
+  // Initialize filter years based on currentFilters
+  $: {
+      const initialStartYear = getYearFromDate(currentFilters.date_range?.from);
+      const initialEndYear = getYearFromDate(currentFilters.date_range?.to);
+
+      // Only update if currentFilters change *and* local state hasn't been set by user interaction yet
+      // Or if the filter is reset externally
+      if (currentFilters.date_range) {
+          if (initialStartYear !== undefined) filterStartYear = initialStartYear;
+          if (initialEndYear !== undefined) filterEndYear = initialEndYear;
+      } else { // Handle external reset
+         if (minSliderYear !== undefined) filterStartYear = minSliderYear; 
+         if (maxSliderYear !== undefined) filterEndYear = maxSliderYear; 
+      }
+
+      // Update other filters as before
+      selectedNewspaper = currentFilters.newspaper || '';
+      selectedLocations = currentFilters.locations || [];
+      selectedSubjects = currentFilters.subjects || [];
+  }
+
   function applyFilters() {
     const newFilters: Filters = {};
-    if (dateFrom || dateTo) {
-      newFilters.date_range = {};
-      if (dateFrom) newFilters.date_range.from = dateFrom;
-      if (dateTo) newFilters.date_range.to = dateTo;
+    // Update date range based on filterStartYear and filterEndYear
+    if (filterStartYear !== undefined && filterEndYear !== undefined) {
+      newFilters.date_range = {
+        from: `${filterStartYear}-01-01`,
+        to: `${filterEndYear}-12-31`,
+      };
+    } else {
+        // If years are undefined, clear the date range filter
+        delete newFilters.date_range;
     }
+
     if (selectedNewspaper) {
       newFilters.newspaper = selectedNewspaper;
     }
@@ -63,30 +119,20 @@
       newFilters.subjects = selectedSubjects;
     }
     
-    // Update the parent's filter state
     currentFilters = newFilters; 
     dispatch('update', newFilters);
   }
 
   function resetFilters() {
-    dateFrom = '';
-    dateTo = '';
+    // Reset start/end years to the slider defaults (min/max available)
+    filterStartYear = minSliderYear; 
+    filterEndYear = maxSliderYear; 
     selectedNewspaper = '';
     selectedLocations = [];
     selectedSubjects = [];
-    currentFilters = {};
-    dispatch('reset');
-    // Need to also trigger an update event if parent relies on it
-    dispatch('update', {}); 
-  }
-
-  // Reactive statement to update local state if parent changes filters externally
-  $: {
-      dateFrom = currentFilters.date_range?.from || '';
-      dateTo = currentFilters.date_range?.to || '';
-      selectedNewspaper = currentFilters.newspaper || '';
-      selectedLocations = currentFilters.locations || [];
-      selectedSubjects = currentFilters.subjects || [];
+    currentFilters = {}; // Clear internal representation
+    dispatch('reset'); // Notify parent about reset
+    dispatch('update', {}); // Trigger update with empty filters
   }
 
   // Reactive statement to dispatch model change event when selection changes
@@ -94,6 +140,14 @@
     if (selectedModel) { // Ensure it has a value
       dispatch('modelchange', { model: selectedModel });
     }
+  }
+
+  // Function to handle year range change from slider
+  function handleYearChange(event: CustomEvent<{ startYear: number; endYear: number }>) {
+    filterStartYear = event.detail.startYear;
+    filterEndYear = event.detail.endYear;
+    // Optionally apply filters immediately on slider change
+    // applyFilters(); 
   }
 </script>
 
@@ -110,18 +164,21 @@
     </select>
   </div>
 
-  <!-- Date Range -->
+  <!-- Date Range -> Year Range Slider -->
   <div class="form-section">
-    <label class="input-label">Date Range</label>
-    <div class="date-input-group">
-      <input type="date" bind:value={dateFrom} class="date-input" placeholder="From" aria-label="Date from">
-      <input type="date" bind:value={dateTo} class="date-input" placeholder="To" aria-label="Date to">
-    </div>
-     {#if options.date_range && (options.date_range.min || options.date_range.max)}
-       <p class="info-text">
-         Available: {options.date_range.min || 'N/A'} to {options.date_range.max || 'N/A'}
-        </p>
-     {/if}
+    <label class="input-label">Year Range</label>
+    {#if minSliderYear !== undefined && maxSliderYear !== undefined}
+      <YearSlider 
+        minYear={minSliderYear}
+        maxYear={maxSliderYear}
+        startYear={filterStartYear ?? minSliderYear} 
+        endYear={filterEndYear ?? maxSliderYear}
+        on:change={handleYearChange}
+      />
+       <!-- Info text removed as it's redundant with slider labels -->
+    {:else}
+       <p class="no-options-text">Date range information unavailable.</p>
+    {/if}
   </div>
 
   <!-- Newspaper -->
