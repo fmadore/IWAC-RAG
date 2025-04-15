@@ -1,13 +1,32 @@
-<script>
+<script context="module" lang="ts">
+  export interface DateRange {
+    from?: string;
+    to?: string;
+    min?: string;
+    max?: string;
+  }
+
+  export interface FilterOptions {
+    newspapers: string[];
+    locations: string[];
+    subjects: string[];
+    date_range: { min?: string; max?: string };
+  }
+
+  export interface Filters {
+    date_range?: { from?: string; to?: string };
+    newspaper?: string;
+    locations?: string[];
+    subjects?: string[];
+  }
+</script>
+
+<script lang="ts">
   import { createEventDispatcher } from 'svelte';
 
-  // Props: 
-  // options (object: { newspapers: [], locations: [], subjects: [], date_range: {min, max} })
-  // currentFilters (object: reactive representation of active filters)
-  // selectedModel (string: the currently selected LLM model)
-  export let options;
-  export let currentFilters = {}; // Initialize as empty object
-  export let selectedModel = 'gemma3:4b'; // Default model passed from parent
+  export let options: FilterOptions;
+  export let currentFilters: Filters = {};
+  export let selectedModel: string = 'gemma3:4b';
 
   const dispatch = createEventDispatcher();
 
@@ -28,7 +47,7 @@
   ];
 
   function applyFilters() {
-    const newFilters = {};
+    const newFilters: Filters = {};
     if (dateFrom || dateTo) {
       newFilters.date_range = {};
       if (dateFrom) newFilters.date_range.from = dateFrom;
@@ -76,20 +95,15 @@
       dispatch('modelchange', { model: selectedModel });
     }
   }
-
 </script>
 
-<div class="p-1 space-y-6 text-sm text-gray-700 dark:text-dark-text-secondary">
-  <h3 class="text-xl font-semibold mb-5 border-b border-gray-200 dark:border-gray-600 pb-3 text-gray-900 dark:text-dark-text">Filters</h3>
+<div class="p-4 bg-white/90 dark:bg-gray-900/90 rounded-2xl shadow-lg space-y-6 border border-blue-100 dark:border-gray-800">
+  <h3 class="text-xl font-semibold mb-4 border-b border-blue-100 dark:border-gray-700 pb-2">Filters</h3>
 
   <!-- Model Selection -->
-  <div class="space-y-2">
-    <label for="model-select" class="block font-medium text-gray-800 dark:text-dark-text">Language Model</label>
-    <select 
-      id="model-select" 
-      bind:value={selectedModel} 
-      class="w-full p-2 border border-gray-300 rounded-md text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-dark-text focus:ring-primary focus:border-primary transition duration-150 ease-in-out shadow-sm"
-    >
+  <div>
+    <label for="model-select" class="block text-sm font-medium mb-1">Language Model</label>
+    <select id="model-select" bind:value={selectedModel} class="w-full p-2 border border-blue-100 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-800 focus:ring-2 focus:ring-blue-400">
       {#each availableModels as model}
         <option value={model.id}>{model.name}</option>
       {/each}
@@ -97,39 +111,23 @@
   </div>
 
   <!-- Date Range -->
-  <div class="space-y-2">
-    <span class="block font-medium text-gray-800 dark:text-dark-text">Date Range</span>
+  <div>
+    <label class="block text-sm font-medium mb-1">Date Range</label>
     <div class="flex gap-2">
-      <input 
-        type="date" 
-        bind:value={dateFrom} 
-        class="w-full p-2 border border-gray-300 rounded-md text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-dark-text focus:ring-primary focus:border-primary transition duration-150 ease-in-out shadow-sm" 
-        placeholder="From" 
-        aria-label="Date from"
-      >
-      <input 
-        type="date" 
-        bind:value={dateTo} 
-        class="w-full p-2 border border-gray-300 rounded-md text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-dark-text focus:ring-primary focus:border-primary transition duration-150 ease-in-out shadow-sm" 
-        placeholder="To" 
-        aria-label="Date to"
-      >
+      <input type="date" bind:value={dateFrom} class="w-full p-2 border border-blue-100 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-800 focus:ring-2 focus:ring-blue-400" placeholder="From" aria-label="Date from">
+      <input type="date" bind:value={dateTo} class="w-full p-2 border border-blue-100 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-800 focus:ring-2 focus:ring-blue-400" placeholder="To" aria-label="Date to">
     </div>
      {#if options.date_range && (options.date_range.min || options.date_range.max)}
-       <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
+       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
          Available: {options.date_range.min || 'N/A'} to {options.date_range.max || 'N/A'}
         </p>
      {/if}
   </div>
 
   <!-- Newspaper -->
-  <div class="space-y-2">
-    <label for="newspaper-select" class="block font-medium text-gray-800 dark:text-dark-text">Newspaper</label>
-    <select 
-      id="newspaper-select" 
-      bind:value={selectedNewspaper} 
-      class="w-full p-2 border border-gray-300 rounded-md text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-dark-text focus:ring-primary focus:border-primary transition duration-150 ease-in-out shadow-sm"
-    >
+  <div>
+    <label for="newspaper-select" class="block text-sm font-medium mb-1">Newspaper</label>
+    <select id="newspaper-select" bind:value={selectedNewspaper} class="w-full p-2 border border-blue-100 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-800 focus:ring-2 focus:ring-blue-400">
       <option value="">All Newspapers</option>
       {#if options.newspapers}
         {#each options.newspapers as newspaper}
@@ -140,58 +138,38 @@
   </div>
 
   <!-- Locations -->
-  <div class="space-y-2">
-     <label for="locations-select" class="block font-medium text-gray-800 dark:text-dark-text">Locations</label>
+  <div>
+     <label for="locations-select" class="block text-sm font-medium mb-1">Locations</label>
      {#if options.locations && options.locations.length > 0}
-       <select 
-         id="locations-select" 
-         multiple 
-         bind:value={selectedLocations} 
-         class="w-full p-2 border border-gray-300 rounded-md text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-dark-text focus:ring-primary focus:border-primary transition duration-150 ease-in-out shadow-sm h-32"
-       >
+       <select id="locations-select" multiple bind:value={selectedLocations} class="w-full p-2 border border-blue-100 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-800 focus:ring-2 focus:ring-blue-400 h-28">
          {#each options.locations as location}
            <option value={location}>{location}</option>
          {/each}
        </select>
-       <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Hold Ctrl/Cmd to select multiple.</p>
+       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple.</p>
      {:else}
-        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">No location filters available.</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">No location filters available.</p>
      {/if}
    </div>
 
    <!-- Subjects -->
-  <div class="space-y-2">
-     <label for="subjects-select" class="block font-medium text-gray-800 dark:text-dark-text">Subjects</label>
+  <div>
+     <label for="subjects-select" class="block text-sm font-medium mb-1">Subjects</label>
      {#if options.subjects && options.subjects.length > 0}
-       <select 
-         id="subjects-select" 
-         multiple 
-         bind:value={selectedSubjects} 
-         class="w-full p-2 border border-gray-300 rounded-md text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-dark-text focus:ring-primary focus:border-primary transition duration-150 ease-in-out shadow-sm h-32"
-       >
+       <select id="subjects-select" multiple bind:value={selectedSubjects} class="w-full p-2 border border-blue-100 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-800 focus:ring-2 focus:ring-blue-400 h-28">
          {#each options.subjects as subject}
            <option value={subject}>{subject}</option>
          {/each}
        </select>
-       <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Hold Ctrl/Cmd to select multiple.</p>
+       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple.</p>
      {:else}
-        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">No subject filters available.</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">No subject filters available.</p>
      {/if}
    </div>
 
   <!-- Buttons -->
-  <div class="flex justify-between items-center pt-5 border-t border-gray-200 dark:border-gray-600">
-    <button 
-      on:click={resetFilters} 
-      class="px-4 py-2 text-sm border border-gray-400 dark:border-gray-500 rounded-md text-gray-700 dark:text-dark-text-secondary hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:focus:ring-offset-dark-surface transition-colors duration-150 ease-in-out shadow-sm"
-    >
-      Reset
-    </button>
-    <button 
-      on:click={applyFilters} 
-      class="px-5 py-2 text-sm bg-primary text-white font-medium rounded-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-dark-surface transition-colors duration-150 ease-in-out shadow-sm"
-    >
-      Apply Filters
-    </button>
+  <div class="flex justify-between pt-4 border-t border-blue-100 dark:border-gray-700 mt-2">
+    <button on:click={resetFilters} class="px-4 py-1.5 text-sm border border-blue-200 dark:border-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-800 transition-colors font-medium text-blue-700 dark:text-blue-300">Reset</button>
+    <button on:click={applyFilters} class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow">Apply</button>
   </div>
 </div> 
