@@ -20,7 +20,8 @@ A modular system for managing different LLM providers:
 - **ModelManager** (`app/models/__init__.py`): Central coordinator that:
   - Loads model configurations from JSON
   - Instantiates appropriate provider classes
-  - Routes requests to the correct provider
+  - **Constructs the final LLM prompt**, incorporating retrieved context documents while respecting the model's token limit.
+  - Routes requests to the correct provider with the finalized prompt.
   - Provides a unified interface for model operations
 
 - **Provider Classes**:
@@ -94,8 +95,9 @@ The backend uses the following environment variables (typically set via a `.env`
 | `COLLECTION_NAME` | ChromaDB collection name | `iwac_articles` | Yes |
 | `EMBEDDING_MODEL_NAME` | SentenceTransformer model | `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` | Yes |
 | `MODEL_NAME` | Default LLM model to use | `gemma3:4b` | Yes |
-| `OLLAMA_BASE_URL` | URL for Ollama API | `http://ollama:11434` | Only for Ollama |
-| `EXTERNAL_API_KEY` | API key for external providers | - | For Gemini/OpenAI |
+| `OLLAMA_BASE_URL` | URL for Ollama API | `http://ollama:11434` | Only if using Ollama |
+| `GEMINI_API_KEY` | API key for Google Gemini | - | Only if using Gemini |
+| `OPENAI_API_KEY` | API key for OpenAI | - | Only if using OpenAI |
 
 ## Adding New Models
 
@@ -126,6 +128,9 @@ To add a new model to the system:
 ### `/query` (POST)
 
 Main endpoint for RAG query processing.
+
+Dynamically retrieves more documents (adjusts `top_k`) for models with large context windows if a low `top_k` is requested.
+Handles final prompt construction and context truncation based on token limits internally.
 
 **Request:**
 ```json
@@ -239,6 +244,7 @@ Each provider handles:
 2. **LLM Provider Issues**:
    - For Ollama: Ensure Ollama service is running and models are downloaded
    - For Gemini/OpenAI: Verify API key is correctly set in `.env`
+   - For Gemini/OpenAI: Verify `GEMINI_API_KEY` or `OPENAI_API_KEY` (as appropriate) is correctly set in `.env`.
    - Check `MODEL_NAME` matches an existing model in your provider
 
 3. **Missing NLTK Data**:

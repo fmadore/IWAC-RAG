@@ -9,13 +9,9 @@ import json
 import os
 from datetime import datetime
 import logging
-from dotenv import load_dotenv
 
 # Import our new ModelManager
 from app.models import model_manager
-
-# Load environment variables from .env file
-load_dotenv(dotenv_path='../../.env') # Adjust path relative to this file
 
 # Basic logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -105,7 +101,7 @@ def get_collection():
 class QueryRequest(BaseModel):
     query: str
     filters: Optional[Dict[str, Any]] = None
-    top_k: int = Field(default=5, ge=1, le=20) # Add validation for top_k
+    top_k: int = Field(default=5, ge=1, le=200) # Allow requesting more docs for large contexts
     model_name: Optional[str] = None # Add optional model name
 
 class Source(BaseModel):
@@ -209,9 +205,30 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
                  # where_filter = {"$and": [...]}
 
         logger.info(f"Querying ChromaDB with where_filter: {where_filter}")
+        
+        # Determine the number of results to fetch dynamically based on model context window
+        n_results = request.top_k
+        selected_model_id = request.model_name or model_manager.default_model_id
+        model_config = model_manager.get_model_config(selected_model_id)
+
+        if model_config:
+            context_window = model_config.get("context_window", 0)
+            LARGE_CONTEXT_THRESHOLD = 100000  # 100k tokens threshold for large context
+            ADJUSTED_K_FOR_LARGE_CONTEXT = 50 # Default k for large context models
+
+            if context_window >= LARGE_CONTEXT_THRESHOLD and request.top_k <= 10:
+                n_results = ADJUSTED_K_FOR_LARGE_CONTEXT
+                logger.info(f"Model {selected_model_id} has large context ({context_window}). Adjusting retrieval to {n_results} documents as requested k ({request.top_k}) was low.")
+            else:
+                # Use user's requested k or default if context isn't large
+                logger.info(f"Using requested/default top_k={request.top_k} for model {selected_model_id} (context: {context_window}).")
+        else:
+            logger.warning(f"Could not find config for model {selected_model_id}. Using requested top_k={request.top_k}.")
+        
+        logger.info(f"Querying ChromaDB with n_results: {n_results}")
         results = collection.query(
             query_texts=[request.query],
-            n_results=request.top_k,
+            n_results=n_results, # Use the determined n_results
             where=where_filter,
             # include=["metadatas", "documents", "distances"] # Include distances for relevance score
             include=["metadatas", "documents"] 
@@ -252,23 +269,15 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
         
         # === LLM Call Logic using our new ModelManager ===
         try:
-            prompt = f"""
-            You are a helpful assistant for the Islam West Africa Collection (IWAC).
-            Your task is to answer the user's question based *only* on the information contained in the following context documents.
-            Read the context carefully and synthesize a coherent, analytical answer in your own words.
-            Do not simply quote passages from the context unless it is essential for clarity. If the information needed to answer the question is not present in the context, state that clearly.
-            Keep your answer concise. Do not refer to the context documents themselves in your response.
-            
-            Context:
-            {context_text}
-            
-            User question: {request.query}
-            
-            Answer:
-            """
+            # Note: Prompt construction is now handled inside ModelManager
+            # Pass the raw query and contexts instead
             
             # Generate response using ModelManager
-            answer = await model_manager.generate_response(prompt, request.model_name)
+            answer = await model_manager.generate_response(
+                user_query=request.query, 
+                contexts=contexts, 
+                model_id=request.model_name
+            )
             logger.info(f"LLM response generated successfully.")
 
         except Exception as e:

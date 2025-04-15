@@ -11,7 +11,7 @@ class GeminiProvider(LLMProvider):
     Implementation of LLMProvider for Google's Gemini API
     """
     def __init__(self):
-        self.api_key = os.getenv("EXTERNAL_API_KEY")
+        self.api_key = os.getenv("GEMINI_API_KEY")
         self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
         logger.info("Initialized GeminiProvider")
 

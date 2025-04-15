@@ -36,8 +36,8 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - CHROMADB_HOST=chromadb
       - CHROMADB_PORT=8000
-      - LLM_PROVIDER=${LLM_PROVIDER}
-      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
+    env_file:
+      - .env
     ports:
       - "5000:5000"
     restart: unless-stopped

@@ -11,7 +11,7 @@ class OpenAIProvider(LLMProvider):
     Implementation of LLMProvider for OpenAI's API
     """
     def __init__(self):
-        self.api_key = os.getenv("EXTERNAL_API_KEY")
+        self.api_key = os.getenv("OPENAI_API_KEY")
         self.base_url = "https://api.openai.com/v1"
         logger.info("Initialized OpenAIProvider")
 
@@ -30,7 +30,7 @@ class OpenAIProvider(LLMProvider):
         
         # Construct the messages format for ChatGPT models
         messages = [
-            {"role": "system", "content": "You are a helpful assistant for the Islam West Africa Collection (IWAC)."},
+            {"role": "system", "content": "Vous êtes un assistant utile pour la Collection Islam Afrique de l'Ouest (IWAC)."},
             {"role": "user", "content": prompt}
         ]
         
