@@ -1,16 +1,14 @@
-# Use the official Ollama image
 FROM ollama/ollama:latest
 
-# Copy the custom entrypoint script
-COPY entrypoint.sh /entrypoint.sh
-# Ensure it has execute permissions within the image (important for Linux containers)
-RUN chmod +x /entrypoint.sh
+# Create entrypoint directory
+WORKDIR /app
 
-# The base image already sets up Ollama and exposes port 11434.
-# No further configuration needed here for a basic setup.
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# Set the custom entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+# Exposing Ollama's default port
+EXPOSE 11434
 
-# Models will be pulled by the entrypoint script after the container starts.
-# Default CMD from base image is overridden by the entrypoint. 
+# Entrypoint script to pull models before starting server
+ENTRYPOINT ["/app/entrypoint.sh"]

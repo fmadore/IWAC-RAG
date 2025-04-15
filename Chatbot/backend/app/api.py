@@ -11,6 +11,9 @@ from datetime import datetime
 import logging
 from dotenv import load_dotenv
 
+# Import our new ModelManager
+from app.models import model_manager
+
 # Load environment variables from .env file
 load_dotenv(dotenv_path='../../.env') # Adjust path relative to this file
 
@@ -30,22 +33,13 @@ app.add_middleware(
 )
 
 # Environment variables
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 CHROMADB_HOST = os.getenv("CHROMADB_HOST", "localhost")
 CHROMADB_PORT = int(os.getenv("CHROMADB_PORT", "8000"))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "iwac_articles")
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
-EXTERNAL_API_KEY = os.getenv("EXTERNAL_API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama3") # Default model for Ollama
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
 
-logger.info(f"Using LLM Provider: {LLM_PROVIDER}")
 logger.info(f"Using ChromaDB Host: {CHROMADB_HOST}:{CHROMADB_PORT}")
 logger.info(f"Using Collection: {COLLECTION_NAME}")
-if LLM_PROVIDER == 'ollama':
-    logger.info(f"Using Ollama Model: {MODEL_NAME} at {OLLAMA_BASE_URL}")
-else:
-    logger.info(f"Using External Model: {MODEL_NAME}")
 logger.info(f"Using Embedding Model: {EMBEDDING_MODEL_NAME}")
 
 # Initialize embedding function once at startup
@@ -139,6 +133,13 @@ class AvailableFilters(BaseModel):
     subjects: List[str]
     date_range: FilterInfo
 
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+
+class ModelsResponse(BaseModel):
+    models: List[ModelInfo]
+
 # Helper function to parse metadata lists safely
 def parse_json_metadata(metadata_str: Optional[str]) -> List[str]:
     if not metadata_str:
@@ -156,10 +157,22 @@ def parse_json_metadata(metadata_str: Optional[str]) -> List[str]:
 def read_root():
     return {"status": "ok", "message": "IWAC RAG API is running"}
 
+@app.get("/models", response_model=ModelsResponse)
+def get_available_models():
+    """
+    Get a list of available models that can be used for querying
+    """
+    try:
+        models = model_manager.get_available_models()
+        return ModelsResponse(models=models)
+    except Exception as e:
+        logger.error(f"Error retrieving available models: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve available models: {str(e)}")
+
 @app.post("/query", response_model=QueryResponse)
-def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_collection)):
+async def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_collection)):
     start_time = datetime.now()
-    logger.info(f"Received query: '{request.query}' with filters: {request.filters} and model: {request.model_name or MODEL_NAME}")
+    logger.info(f"Received query: '{request.query}' with filters: {request.filters} and model: {request.model_name}")
     
     try:
         # Prepare filters for ChromaDB query
@@ -237,120 +250,27 @@ def query(request: QueryRequest, collection: chromadb.Collection = Depends(get_c
 
         context_text = "\n\n---\n\n".join(contexts)
         
-        # === LLM Call Logic ===
-        answer = ""
-        logger.info(f"Generating response using {LLM_PROVIDER}...")
-        
+        # === LLM Call Logic using our new ModelManager ===
         try:
-            if LLM_PROVIDER == "ollama":
-                # Determine which model to use
-                target_model = request.model_name if request.model_name else MODEL_NAME
-                logger.info(f"Using Ollama model: {target_model}")
+            prompt = f"""
+            You are a helpful assistant for the Islam West Africa Collection (IWAC).
+            Your task is to answer the user's question based *only* on the information contained in the following context documents.
+            Read the context carefully and synthesize a coherent, analytical answer in your own words.
+            Do not simply quote passages from the context unless it is essential for clarity. If the information needed to answer the question is not present in the context, state that clearly.
+            Keep your answer concise. Do not refer to the context documents themselves in your response.
+            
+            Context:
+            {context_text}
+            
+            User question: {request.query}
+            
+            Answer:
+            """
+            
+            # Generate response using ModelManager
+            answer = await model_manager.generate_response(prompt, request.model_name)
+            logger.info(f"LLM response generated successfully.")
 
-                prompt = f"""
-                You are a helpful assistant for the Islam West Africa Collection (IWAC).
-                Your task is to answer the user's question based *only* on the information contained in the following context documents.
-                Read the context carefully and synthesize a coherent, analytical answer in your own words.
-                Do not simply quote passages from the context unless it is essential for clarity. If the information needed to answer the question is not present in the context, state that clearly.
-                Keep your answer concise. Do not refer to the context documents themselves in your response.
-                
-                Context:
-                {context_text}
-                
-                User question: {request.query}
-                
-                Answer:
-                """
-                response = requests.post(
-                    f"{OLLAMA_BASE_URL}/api/generate",
-                    json={
-                        "model": target_model, # Use the determined model name
-                        "prompt": prompt,
-                        "stream": False,
-                        "temperature": 0.1,
-                        "options": {"num_ctx": 4096} # Example option, adjust as needed
-                    },
-                    timeout=60 # Add timeout
-                )
-                response.raise_for_status() # Raise exception for bad status codes
-                result = response.json()
-                answer = result.get("response", "").strip()
-                logger.info(f"Ollama response received successfully.")
-
-            elif LLM_PROVIDER == "gemini":
-                if not EXTERNAL_API_KEY:
-                    raise HTTPException(status_code=500, detail="Gemini API key not configured in .env (EXTERNAL_API_KEY)")
-                
-                # Determine which model to use: request parameter or default
-                gemini_default_model = "gemini-2.0-flash" 
-                target_model = request.model_name if request.model_name else gemini_default_model
-                logger.info(f"Using Gemini model: {target_model}")
-                
-                # Construct API URL with the chosen model
-                gemini_api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={EXTERNAL_API_KEY}"
-                
-                # Construct prompt for RAG
-                prompt = f"""
-                You are a helpful assistant for the Islam West Africa Collection (IWAC).
-                Your task is to answer the user's question based *only* on the information contained in the following context documents.
-                Read the context carefully and synthesize a coherent, analytical answer in your own words.
-                Do not simply quote passages from the context unless it is essential for clarity. If the information needed to answer the question is not present in the context, state that clearly.
-                Keep your answer concise. Do not refer to the context documents themselves in your response.
-                
-                Context:
-                {context_text}
-                
-                User question: {request.query}
-                
-                Answer:
-                """
-
-                request_payload = {
-                    "contents": [{
-                        "parts":[{"text": prompt}]
-                    }],
-                    # Add generation config if needed (temperature, etc.)
-                    # "generationConfig": {
-                    #     "temperature": 0.7,
-                    #     "maxOutputTokens": 1024
-                    # }
-                }
-                
-                logger.debug(f"Sending request to Gemini API: {gemini_api_url}")
-                response = requests.post(
-                    gemini_api_url,
-                    headers={'Content-Type': 'application/json'},
-                    json=request_payload,
-                    timeout=90 # Slightly longer timeout for external API
-                )
-                response.raise_for_status() # Raise exception for bad status codes (4xx, 5xx)
-                
-                result = response.json()
-                logger.debug(f"Received response from Gemini API: {result}")
-                
-                # Extract text - based on typical Gemini API response structure
-                try:
-                    answer = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-                except (KeyError, IndexError, TypeError) as e:
-                    logger.error(f"Failed to parse Gemini response: {result}. Error: {e}")
-                    raise HTTPException(status_code=500, detail="Failed to parse response from Gemini API")
-                    
-                logger.info("Gemini response received successfully.")
-
-            elif LLM_PROVIDER == "openai":
-                if not EXTERNAL_API_KEY:
-                    raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-                # Placeholder: Implement OpenAI API Call
-                # Needs openai library
-                answer = f"[OpenAI answer placeholder for query: {request.query}]" # Placeholder
-                logger.info("OpenAI placeholder response generated.")
-
-            else:
-                raise HTTPException(status_code=501, detail=f"Unsupported LLM provider: {LLM_PROVIDER}")
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error calling LLM provider ({LLM_PROVIDER}): {e}")
-            raise HTTPException(status_code=503, detail=f"Error communicating with LLM service: {e}")
         except Exception as e:
             logger.error(f"Error during LLM response generation: {e}")
             raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
@@ -436,4 +356,4 @@ if __name__ == "__main__":
         # exit(1) 
     
     logger.info("Starting Uvicorn server...")
-    uvicorn.run("api:app", host="0.0.0.0", port=5000, reload=True) # Add reload=True for dev 
+    uvicorn.run("api:app", host="0.0.0.0", port=5000, reload=True) # Add reload=True for dev

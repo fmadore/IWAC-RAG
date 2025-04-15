@@ -1,4 +1,130 @@
-# IWAC RAG Chatbot Implementation Roadmap
+# IWAC-RAG: Islam West Africa Collection - Retrieval Augmented Generation
+
+This repository contains the code for a RAG (Retrieval Augmented Generation) system that provides an interactive chatbot interface for querying the Islam West Africa Collection archives.
+
+## System Overview
+
+The IWAC-RAG system consists of several components:
+
+1. **Vector Database**: ChromaDB stores vector embeddings of article chunks for efficient semantic retrieval.
+2. **LLM Service**: Flexible architecture supporting multiple LLM providers (Ollama, Gemini, OpenAI).
+3. **Backend API**: FastAPI service that handles query processing, retrieval, and LLM generation.
+4. **Frontend UI**: Interactive SvelteKit user interface for querying and displaying results.
+
+## Backend Architecture
+
+The backend uses a modular architecture with the following components:
+
+### Model Management
+
+- **ModelManager**: Central coordinator that loads configurations and routes requests to appropriate providers.
+- **LLM Providers**: Separate modules for each supported LLM service (Ollama, Gemini, OpenAI).
+- **Configuration**: Models and their settings (context window, temperature, etc.) defined in JSON.
+
+### API Endpoints
+
+- **`/query`**: Main endpoint that performs RAG retrieval and response generation.
+- **`/models`**: Provides information about available models.
+- **`/filters`**: Returns metadata for filtering search results (newspapers, dates, etc.).
+
+## Getting Started
+
+### Prerequisites
+
+- Docker and Docker Compose
+- (Optional) API keys for external LLMs (Gemini, OpenAI)
+
+### Configuration
+
+1. Copy `.env.example` to `.env` and configure your environment:
+
+```bash
+cp Chatbot/.env.example Chatbot/.env
+```
+
+2. Edit the `.env` file to set your preferences:
+   - Select LLM provider (`OLLAMA`, `GEMINI`, or `OPENAI`)
+   - Configure API keys for external providers
+   - Set default model
+
+### Running with Docker Compose
+
+1. Start all services:
+
+```bash
+cd Chatbot
+docker-compose up -d
+```
+
+2. Index your article data (first time only):
+
+```bash
+docker-compose exec backend python scripts/index_to_chroma.py
+```
+
+3. Access the frontend at: http://localhost:3000
+
+## Using Multiple Models
+
+The system supports switching between different LLM models at runtime:
+
+- Local models via Ollama (gemma3:4b, deepseek-r1:7b, etc.)
+- Google's Gemini models (requires API key)
+- OpenAI models (requires API key)
+
+You can select the model in the UI or configure a default in the `.env` file.
+
+## Adding New Models
+
+To add a new model:
+
+1. Edit `backend/app/config/model_configs.json` to add your model configuration.
+2. If adding a new provider type, create a new provider class in `backend/app/models/`.
+
+## Development
+
+### Local Development Setup
+
+For local development without Docker:
+
+1. Set up Python environment for backend:
+
+```bash
+cd Chatbot/backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+2. Set up Node.js environment for frontend:
+
+```bash
+cd Chatbot/frontend
+npm install
+```
+
+3. Run services locally:
+   - ChromaDB (via Docker or local install)
+   - Ollama (if using local models)
+   - Backend: `uvicorn app.api:app --reload`
+   - Frontend: `npm run dev`
+
+## Environment Variables
+
+Key environment variables (set in `.env`):
+
+- `LLM_PROVIDER`: The LLM service to use (`ollama`, `gemini`, or `openai`)
+- `MODEL_NAME`: Default model ID to use
+- `EXTERNAL_API_KEY`: API key for Gemini or OpenAI
+- `OLLAMA_BASE_URL`: URL for the Ollama service
+- `CHROMADB_HOST`: ChromaDB host
+- `CHROMADB_PORT`: ChromaDB port (default: 8000)
+- `COLLECTION_NAME`: Name of the ChromaDB collection
+- `EMBEDDING_MODEL_NAME`: Model used for generating vector embeddings
+
+## License
+
+[Your license information here]
 
 ## 1. Environment Setup
 
