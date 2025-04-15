@@ -250,9 +250,7 @@ Chatbot/
   - [x] Project initialization (using `npm create svelte@latest .`)
   - [x] Component structure (basic files created)
   - [x] API integration (fetch calls in `+page.svelte`)
-  - [x] Add Tailwind CSS (via `svelte-add`)
-  - [x] Add Tailwind plugins (`@tailwindcss/typography`, `@tailwindcss/forms`)
-  - [ ] Responsive design foundation (requires Tailwind/CSS setup)
+  - [ ] Responsive design foundation (requires CSS setup)
 
 ### 4.2 UI Components
 - [x] Develop key components (placeholders/basic versions created):

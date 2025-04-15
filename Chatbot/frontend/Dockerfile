@@ -1,5 +1,5 @@
 # Stage 1: Build the SvelteKit application
-FROM node:18-alpine AS builder
+FROM node:18 AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN npm run build
 # Stage 2: Serve the application using a lightweight server
 # Using a simple Node server with 'sirv-cli' as an example
 # Alternatively, use Nginx or another static server
-FROM node:18-alpine
+FROM node:18
 
 WORKDIR /app
 
