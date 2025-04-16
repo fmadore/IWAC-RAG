@@ -13,15 +13,11 @@ class AnthropicProvider(LLMProvider):
     def __init__(self):
         # The Anthropic client automatically uses ANTHROPIC_API_KEY env var
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
-        try:
-            # Attempt to initialize the sync client just to check credentials early if needed,
-            # but we'll use the async client in generate()
-            if self.api_key:
-                anthropic.Anthropic(api_key=self.api_key) # This might throw error if key is invalid
-            logger.info("Initialized AnthropicProvider (API key presence checked)")
-        except anthropic.AnthropicError as e:
-            # Log the error but don't prevent instantiation, validation happens in generate
-            logger.warning(f"Potential issue initializing Anthropic client sync check: {e}")
+        if self.api_key:
+            logger.info("Initialized AnthropicProvider (API key found)")
+        else:
+            logger.warning("Anthropic API key not found in environment.")
+            # The validate_api_key method will handle checks before generation
 
     async def generate(self, prompt: str, model_id: str, options: Dict[str, Any]) -> str:
         """

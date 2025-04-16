@@ -27,7 +27,7 @@ A modular system for managing different LLM providers:
 - **Provider Classes**:
   - `base.py` - Abstract base class defining the LLM provider interface
   - `ollama_provider.py` - Implementation for local Ollama models
-  - `gemini_provider.py` - Implementation for Google's Gemini models
+  - `gemini_provider.py` - Implementation for Google's Gemini models (using google-genai SDK)
   - `openai_provider.py` - Implementation for OpenAI's GPT models
   - `anthropic_provider.py` - Implementation for Anthropic's Claude models
 
