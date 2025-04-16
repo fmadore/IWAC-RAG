@@ -49,6 +49,16 @@
       "options": {
         "max_tokens": 4096
       }
+    },
+    {
+      "id": "claude-3-5-haiku-20241022",
+      "name": "Anthropic: Claude 3.5 Haiku",
+      "provider": "anthropic",
+      "context_window": 200000,
+      "temperature": 0.3,
+      "options": {
+        "maxOutputTokens": 4096 
+      }
     }
   ]
 }

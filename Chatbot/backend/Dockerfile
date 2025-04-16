@@ -1,9 +1,9 @@
 # Use an official Python runtime as a parent image
-FROM python:3.10-slim
+FROM python:3.10.14-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory in the container
 WORKDIR /app
@@ -44,4 +44,4 @@ ENTRYPOINT ["/app/entrypoint.sh"]
 # # Use the "reload" flag for development, remove it for production
 # CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "5000"]
 # # For development with reload:
-# # CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "5000", "--reload"] 
+# # CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]

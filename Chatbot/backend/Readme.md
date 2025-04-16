@@ -29,6 +29,7 @@ A modular system for managing different LLM providers:
   - `ollama_provider.py` - Implementation for local Ollama models
   - `gemini_provider.py` - Implementation for Google's Gemini models
   - `openai_provider.py` - Implementation for OpenAI's GPT models
+  - `anthropic_provider.py` - Implementation for Anthropic's Claude models
 
 ### 3. Configuration (`app/config/`)
 
@@ -98,6 +99,7 @@ The backend uses the following environment variables (typically set via a `.env`
 | `OLLAMA_BASE_URL` | URL for Ollama API | `http://ollama:11434` | Only if using Ollama |
 | `GEMINI_API_KEY` | API key for Google Gemini | - | Only if using Gemini |
 | `OPENAI_API_KEY` | API key for OpenAI | - | Only if using OpenAI |
+| `ANTHROPIC_API_KEY` | API key for Anthropic | - | Only if using Anthropic |
 
 ## Adding New Models
 
@@ -184,6 +186,10 @@ Returns available models that can be used with the `/query` endpoint.
     {
       "id": "gemini-pro",
       "name": "Gemini: Pro"
+    },
+    {
+      "id": "claude-3-5-haiku-20240620",
+      "name": "Anthropic: Claude 3.5 Haiku"
     }
   ]
 }
@@ -245,6 +251,7 @@ Each provider handles:
    - For Ollama: Ensure Ollama service is running and models are downloaded
    - For Gemini/OpenAI: Verify API key is correctly set in `.env`
    - For Gemini/OpenAI: Verify `GEMINI_API_KEY` or `OPENAI_API_KEY` (as appropriate) is correctly set in `.env`.
+   - For Anthropic: Verify `ANTHROPIC_API_KEY` is correctly set in `.env`.
    - Check `MODEL_NAME` matches an existing model in your provider
 
 3. **Missing NLTK Data**:

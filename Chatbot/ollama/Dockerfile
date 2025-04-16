@@ -1,4 +1,4 @@
-FROM ollama/ollama:latest
+FROM ollama/ollama:0.6.5
 
 # Create entrypoint directory
 WORKDIR /app

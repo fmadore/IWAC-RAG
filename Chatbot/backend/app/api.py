@@ -57,7 +57,7 @@ _collection = None
 
 def get_chroma_client():
     global _chroma_client
-    if _chroma_client is None:
+    if (_chroma_client is None):
         logger.info("Initializing ChromaDB client...")
         try:
             _chroma_client = chromadb.HttpClient(host=CHROMADB_HOST, port=CHROMADB_PORT)
@@ -225,6 +225,11 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
         else:
             logger.warning(f"Could not find config for model {selected_model_id}. Using requested top_k={request.top_k}.")
         
+        # Dynamically increase n_results for Gemini models to maximize context window
+        if selected_model_id and selected_model_id.startswith("gemini"):
+            n_results = 1000  # Gemini can handle huge context windows; adjust as needed
+            logger.info(f"Gemini model detected. Setting n_results to {n_results} to maximize context window.")
+
         logger.info(f"Querying ChromaDB with n_results: {n_results}")
         results = collection.query(
             query_texts=[request.query],
@@ -244,8 +249,8 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
                 results["metadatas"][0],
                 results["ids"][0]
             ):
-                contexts.append(doc)
-                
+                # Use the full document text for the LLM context
+                contexts.append(doc)  # This is the full chunk text from ChromaDB
                 # Safely access metadata
                 sources.append(Source(
                     id=metadata.get("article_id", doc_id), # Fallback to chunk id if article_id missing
@@ -267,6 +272,11 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
 
         context_text = "\n\n---\n\n".join(contexts)
         
+        # Log the context chunks being sent to the LLM for debugging
+        logger.info(f"Sending {len(contexts)} context chunks to LLM for query: '{request.query}'")
+        for i, ctx in enumerate(contexts):
+            logger.info(f"Context chunk {i+1}: {ctx[:300]}{'...' if len(ctx) > 300 else ''}")
+
         # === LLM Call Logic using our new ModelManager ===
         try:
             # Note: Prompt construction is now handled inside ModelManager
