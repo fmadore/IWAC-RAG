@@ -17,6 +17,8 @@ Thumbs.db
 .vscode/
 .idea/
 
+indexing_log.txt
+
 # Optional: Large data files or generated vectors
 # data/processed/*.json
 # data/vectors/* 
