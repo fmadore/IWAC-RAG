@@ -34,13 +34,15 @@ class ModelManager:
         """
         if config_path is None:
             # Use default path relative to this file's parent's parent (app dir)
-            base_dir = Path(__file__).parent.parent
-            config_path = os.path.join(base_dir, "config", "model_configs.json")
+            base_dir = Path(__file__).parent.parent # /app/app
+            config_path = os.path.join(base_dir, "config", "model_configs.json") # /app/app/config/... OK
 
         if articles_path is None:
             # Default path for articles within the container's app dir
-            base_dir = Path(__file__).parent.parent
-            articles_path = os.path.join(base_dir, "data", "processed", "input_articles.json")
+            # The volume maps to /app/data, not /app/app/data
+            # Go up one more level from base_dir (/app/app) to get to /app
+            app_root_dir = Path(__file__).parent.parent.parent # /app
+            articles_path = os.path.join(app_root_dir, "data", "processed", "input_articles.json") # /app/data/processed/... Correct!
 
         self.config_path = config_path
         self.articles_path = articles_path
@@ -238,7 +240,7 @@ Fonctionnalités clés :
 8. Discutez des différentes perspectives ou interprétations sur le sujet, si elles existent dans le contexte fourni.
 9. Concluez par des questions stimulantes ou des pistes d'exploration supplémentaires liées au sujet.
 
-Rappelez-vous de maintenir la rigueur académique tout en présentant les informations de manière engageante et accessible. Vos réponses doivent non seulement informer, mais aussi encourager une enquête plus approfondie et une réflexion critique sur le sujet. Basez vos réponses sur le contexte fourni sans référencer ou citer explicitement les sources. Si vous n'êtes pas sûr d'une information, indiquez-le clairement dans votre réponse.
+Synthétisez votre réponse à partir des informations présentes dans le contexte fourni, même si la réponse directe n'est pas explicitement formulée en un seul endroit. Ne référencez pas ou ne citez pas explicitement les sources.
 
 Context:
 {{context_section}}
@@ -307,7 +309,7 @@ Fonctionnalités clés :
 8. Discutez des différentes perspectives ou interprétations sur le sujet, si elles existent dans le contexte fourni.
 9. Concluez par des questions stimulantes ou des pistes d'exploration supplémentaires liées au sujet.
 
-Rappelez-vous de maintenir la rigueur académique tout en présentant les informations de manière engageante et accessible. Vos réponses doivent non seulement informer, mais aussi encourager une enquête plus approfondie et une réflexion critique sur le sujet. Basez vos réponses sur le contexte fourni sans référencer ou citer explicitement les sources. Si vous n'êtes pas sûr d'une information, indiquez-le clairement dans votre réponse.
+Synthétisez votre réponse à partir des informations présentes dans le contexte fourni, même si la réponse directe n'est pas explicitement formulée en un seul endroit. Ne référencez pas ou ne citez pas explicitement les sources.
 
 Context:
 {{context_section}}

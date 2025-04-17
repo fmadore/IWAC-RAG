@@ -57,23 +57,22 @@ class AnthropicProvider(LLMProvider):
             # Use the async client for FastAPI integration
             # Initialize it here to ensure it uses the correct key context
             async_client = anthropic.AsyncAnthropic(api_key=self.api_key)
-            message = await async_client.messages.create(
+            
+            # Use streaming API
+            response_chunks = []
+            async with async_client.messages.stream(
                 model=model_id,
                 system=system_prompt,
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-            )
-
-            # Extract the response content
-            if message.content and isinstance(message.content, list):
-                # Ensure we correctly handle potential list of content blocks
-                answer = "".join([block.text for block in message.content if hasattr(block, 'text')])
-                logger.info("Anthropic response received successfully")
-                return answer.strip()
-            else:
-                logger.error(f"Unexpected Anthropic response format: {message.content}")
-                raise Exception("Unexpected response format from Anthropic API")
+            ) as stream:
+                async for text in stream.text_stream:
+                    response_chunks.append(text)
+            
+            answer = "".join(response_chunks)
+            logger.info("Anthropic streaming response received successfully")
+            return answer.strip()
 
         except anthropic.APIError as e:
             logger.error(f"Anthropic API error: {e}")

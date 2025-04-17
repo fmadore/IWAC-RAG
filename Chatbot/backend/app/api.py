@@ -210,7 +210,7 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
                  # If complex logic ($and, $or) is needed, construct it here
                  # where_filter = {"$and": [...]}
 
-        logger.info(f"Querying ChromaDB with where_filter: {where_filter}")
+        logger.info(f"Constructed ChromaDB where_filter: {where_filter}")
         
         # Determine the number of results to fetch dynamically based on model context window
         n_results = request.top_k
@@ -239,7 +239,7 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
         else:
             logger.warning(f"Could not find config for model {selected_model_id}. Using requested top_k={request.top_k}.")
         
-        logger.info(f"Querying ChromaDB with n_results: {n_results}")
+        logger.info(f"Starting ChromaDB query with n_results: {n_results}...")
         results = collection.query(
             query_texts=[request.query],
             n_results=n_results, # Use the determined n_results
@@ -247,6 +247,7 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
             # include=["metadatas", "documents", "distances"] # Include distances for relevance score
             include=["metadatas", "documents"] 
         )
+        logger.info(f"ChromaDB query completed. Retrieved {len(results['ids'][0]) if results and results['ids'] else 0} chunks.")
         
         # Process results - NOW focusing on getting unique relevant article IDs
         # contexts = [] # No longer collecting chunk text here
@@ -254,7 +255,7 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
         retrieved_metadata = [] # Collect metadata from retrieved chunks
 
         if results and results["ids"] and results["ids"][0]:
-            logger.info(f"Retrieved {len(results['ids'][0])} chunks from ChromaDB.")
+            # logger.info(f"Retrieved {len(results['ids'][0])} chunks from ChromaDB.") # Already logged above
             for doc_text, metadata, doc_id in zip(
                 results["documents"][0],
                 results["metadatas"][0],
@@ -269,7 +270,7 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
                     title=metadata.get("title", "No Title"),
                     newspaper=metadata.get("newspaper"),
                     date=metadata.get("date"),
-                    # url=metadata.get("url"), # Need to ensure URL is stored in metadata
+                    # url=metadata.get("url"), # Reverted: No need for external URL
                     text_snippet=doc_text[:500] + "..." if len(doc_text) > 500 else doc_text # Snippet from chunk
                 ))
         else:
@@ -288,20 +289,21 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
         # logger.info(f"Sending {len(contexts)} context chunks to LLM for query: '{request.query}'")
         # for i, ctx in enumerate(contexts):
         #     logger.info(f"Context chunk {i+1}: {ctx[:300]}{'...' if len(ctx) > 300 else ''}")
-        logger.info(f"Sending metadata for {len(retrieved_metadata)} retrieved chunks to ModelManager for query: '{request.query}'")
+        logger.info(f"Preparing LLM request. Passing metadata for {len(retrieved_metadata)} retrieved chunks to ModelManager for query: '{request.query}'")
 
         # === LLM Call Logic using our new ModelManager ===
         try:
             # Note: Prompt construction is now handled inside ModelManager
             # Pass the raw query and RETRIEVED METADATA instead of chunk text
             
+            logger.info(f"Calling ModelManager.generate_response with model '{request.model_name or model_manager.default_model_id}'...")
             # Generate response using ModelManager
             answer, used_article_ids = await model_manager.generate_response(
                 user_query=request.query,
                 retrieved_metadata=retrieved_metadata,
                 model_id=request.model_name
             )
-            logger.info(f"LLM response generated successfully.")
+            logger.info(f"LLM response generated successfully by ModelManager.")
             logger.info(f"Actual articles used for context: {used_article_ids}")
 
             # Filter sources to include only those whose articles were actually used
@@ -322,12 +324,12 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
                 final_sources = []
 
         except Exception as e:
-            logger.error(f"Error during LLM response generation: {e}")
+            logger.error(f"Error during LLM response generation via ModelManager: {e}")
             raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
 
         # Calculate query time
         query_time = (datetime.now() - start_time).total_seconds()
-        logger.info(f"Query processed in {query_time:.2f} seconds.")
+        logger.info(f"Query processed successfully in {query_time:.2f} seconds.")
         
         return QueryResponse(
             answer=answer or "No answer generated.", # Fallback answer

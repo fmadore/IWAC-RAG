@@ -53,6 +53,7 @@ def process_article(article: Dict[str, Any], chunk_size: int = 512, overlap: int
     newspaper = article.get("newspaper", "")
     # Ensure date is treated as a string
     date = str(article.get("date", "")) 
+    # url = article.get("url", "") # Reverted: No need to extract URL for ZMO link
     # Map subject/spatial keywords to subjects/locations lists
     subjects_keywords = article.get("subject", [])
     if isinstance(subjects_keywords, str): # Handle if it's a single string
@@ -73,6 +74,7 @@ def process_article(article: Dict[str, Any], chunk_size: int = 512, overlap: int
                 "title": title,
                 "newspaper": newspaper,
                 "date": date,
+                # "url": url, # Reverted
                 "subjects": subjects_keywords, # Use the mapped list
                 "locations": locations_keywords, # Use the mapped list
                 "chunk_idx": len(chunks),
@@ -104,6 +106,7 @@ def process_article(article: Dict[str, Any], chunk_size: int = 512, overlap: int
             "title": title,
             "newspaper": newspaper,
             "date": date,
+            # "url": url, # Reverted
             "subjects": subjects_keywords, # Use the mapped list
             "locations": locations_keywords, # Use the mapped list
             "chunk_idx": len(chunks),
@@ -155,6 +158,7 @@ def index_articles(input_file: str, chroma_host: str, chroma_port: int, collecti
             "title": chunk["title"],
             "newspaper": chunk["newspaper"],
             "date": chunk["date"],
+            # "url": chunk.get("url", ""), # Reverted
             # Ensure subjects/locations are dumped as JSON strings for ChromaDB metadata
             "subjects": json.dumps(chunk.get("subjects", [])), 
             "locations": json.dumps(chunk.get("locations", [])),

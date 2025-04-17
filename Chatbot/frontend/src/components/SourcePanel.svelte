@@ -27,11 +27,14 @@
             </p>
           {/if}
           <p class="source-snippet">"{source.text_snippet}"</p>
-          {#if source.url}
+          
+          {#if source.url && source.url.trim() !== ''}
+            <!-- Link to original URL if available -->
             <a href={source.url} target="_blank" rel="noopener noreferrer" class="source-link">
-              View Original (ID: {source.id})
+              View Original Source
             </a>
           {:else}
+             <!-- Fallback to ZMO database link -->
              <a href={`https://islam.zmo.de/s/afrique_ouest/item/${source.id}`} target="_blank" rel="noopener noreferrer" class="source-link">
                View on ZMO Database (ID: {source.id})
              </a>
