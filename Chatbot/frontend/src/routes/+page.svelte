@@ -3,6 +3,7 @@
   import ChatMessage from '../components/ChatMessage.svelte';
   import FilterPanel from '../components/FilterPanel.svelte';
   import SourcePanel from '../components/SourcePanel.svelte';
+  import { saveConversationAsHtml } from '../lib/saveConversation'; // Import the save function
   
   // Types
   interface ChatMessage {
@@ -183,15 +184,26 @@
       <h1 class="app-title">
         <span class="title-icon">🤖</span> Islam West Africa Collection (IWAC) ChatBot
       </h1>
-      <button 
-        on:click={() => showFilters = !showFilters}
-        class="filter-toggle-button"
-        aria-label="Toggle Filters"
-        aria-expanded={showFilters}
-      >
-        <span class="filter-toggle-icon">☰</span> 
-        Filters
-      </button>
+      <div class="header-buttons">
+        <button 
+          on:click={() => saveConversationAsHtml(messages, sources)}
+          class="header-action-button save-button"
+          aria-label="Save Conversation"
+          title="Save Conversation as HTML"
+          disabled={messages.length === 0}
+        >
+          <span class="button-icon">💾</span> Save
+        </button>
+        <button 
+          on:click={() => showFilters = !showFilters}
+          class="header-action-button filter-toggle-button"
+          aria-label="Toggle Filters"
+          title="Toggle Filters Panel"
+          aria-expanded={showFilters}
+        >
+          <span class="button-icon">☰</span> Filters
+        </button>
+      </div>
     </div>
   </header>
   
@@ -313,26 +325,51 @@
     color: #4299e1; /* Blue */
   }
 
-  .filter-toggle-button {
+  .header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem; /* 12px */
+  }
+
+  .header-action-button { /* Common style for header buttons */
     padding: 0.5rem 0.75rem; /* Smaller padding */
-    background-color: #4299e1; /* Blue */
     color: white;
     border: none;
     border-radius: 0.5rem; /* 8px */
     display: flex;
     align-items: center;
+    gap: 0.25rem; /* 4px */
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
     font-weight: 500;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  
+  .save-button {
+    background-color: #38a169; /* Green */
+  }
+  
+  .save-button:hover:not(:disabled) {
+    background-color: #2f855a; /* Darker Green */
+  }
+  
+  .save-button:disabled {
+    background-color: #9ae6b4; /* Lighter green when disabled */
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .filter-toggle-button {
+    background-color: #4299e1; /* Blue */
   }
 
   .filter-toggle-button:hover {
     background-color: #2b6cb0; /* Darker blue */
   }
 
-  .filter-toggle-icon {
-    margin-right: 0.25rem; /* 4px */
+  .button-icon { /* Icon style for both buttons */
+      display: inline-block;
+      /* Add size or other styling if needed */
   }
 
   /* Main Layout */

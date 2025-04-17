@@ -210,13 +210,14 @@
 
   <!-- Date Range -> Year Range Slider -->
   <div class="form-section">
-    <label class="input-label">Year Range</label>
+    <div id="year-range-label" class="input-label">Year Range</div>
     {#if minSliderYear !== undefined && maxSliderYear !== undefined}
       <YearSlider 
         minYear={minSliderYear}
         maxYear={maxSliderYear}
         startYear={filterStartYear ?? minSliderYear} 
         endYear={filterEndYear ?? maxSliderYear}
+        ariaLabelledby="year-range-label"
         on:change={handleYearChange}
       />
        <!-- Info text removed as it's redundant with slider labels -->
@@ -294,10 +295,6 @@
     color: #1a202c;
   }
 
-  .form-section {
-    /* Container for label + input group */
-  }
-
   .input-label {
     /* Replaces block text-sm font-medium mb-1 */
     display: block;
@@ -309,7 +306,6 @@
 
   /* Common Input Styles */
   .select-input,
-  .date-input,
   .multi-select-input {
     /* Replaces w-full p-2 border border-blue-100 rounded-lg text-sm */
     width: 100%;
@@ -323,7 +319,6 @@
   }
 
   .select-input:focus,
-  .date-input:focus,
   .multi-select-input:focus {
      /* Replaces focus:ring-2 focus:ring-blue-400 */
     outline: none;
@@ -332,12 +327,6 @@
   }
 
   /* Specific Input Styles */
-  .date-input-group {
-     /* Replaces flex gap-2 */
-    display: flex;
-    gap: 0.5rem;
-  }
-
   .multi-select-input {
      /* Replaces h-28 */
     height: 7rem; 

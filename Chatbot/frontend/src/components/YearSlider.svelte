@@ -5,6 +5,7 @@
   export let maxYear: number = new Date().getFullYear();
   export let startYear: number = minYear;
   export let endYear: number = maxYear;
+  export let ariaLabelledby: string | undefined = undefined;
 
   const dispatch = createEventDispatcher();
 
@@ -79,8 +80,8 @@
 
 </script>
 
-<div class="year-slider-container">
-  <label class="slider-label">Year Range: {currentStart} - {currentEnd}</label>
+<div class="year-slider-container" aria-labelledby={ariaLabelledby}>
+  <div class="slider-label">Year Range: {currentStart} - {currentEnd}</div>
   
   <div class="sliders-wrapper">
     <!-- Background Track -->

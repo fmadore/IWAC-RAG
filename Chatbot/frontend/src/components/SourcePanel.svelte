@@ -128,12 +128,6 @@
     text-decoration: underline;
   }
   
-  .source-id-only {
-     /* Replaces text-xs text-gray-400 */
-    font-size: 0.75rem; /* text-xs */
-    color: #a0aec0; /* text-gray-400 */
-  }
-
   .no-sources-text {
     /* Replaces text-sm text-gray-400 */
     font-size: 0.875rem; /* text-sm */
@@ -154,7 +148,6 @@
      .source-meta { color: #a0aec0; } // dark:text-gray-400
      .source-snippet { color: #cbd5e0; } // dark:text-gray-300
      .source-link { color: #63b3ed; } // dark:text-blue-400
-     .source-id-only { color: #718096; } // dark:text-gray-500
      .no-sources-text { color: #718096; } // dark:text-gray-500
   } 
   */

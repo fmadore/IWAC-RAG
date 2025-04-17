@@ -9,6 +9,7 @@ import json
 import os
 from datetime import datetime
 import logging
+import uvicorn
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -346,66 +347,91 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
 
 @app.get("/filters", response_model=AvailableFilters)
 def get_available_filters(collection: chromadb.Collection = Depends(get_collection)):
-    logger.info("Request received for available filters.")
+    """
+    Get available filter options from the metadata in the ChromaDB collection
+    """
     try:
-        # Efficiently get distinct metadata values if ChromaDB supports it directly.
-        # As of now, it might require fetching a sample or all metadata.
-        # Fetching a larger sample for better coverage, consider limits.
-        logger.info(f"Fetching sample metadata from '{COLLECTION_NAME}' for filters...")
-        results = collection.get(limit=1000, include=["metadatas"]) # Fetch more to get better stats
+        # Log the current number of documents in the collection
+        count = collection.count()
+        logger.info(f"Fetching filters. Collection '{collection.name}' currently contains {count} documents.")
+
+        # Retrieve a sample of metadata to determine available filters
+        # Note: collection.get() without IDs/where might be inefficient for large collections
+        # Consider optimizing if performance becomes an issue (e.g., dedicated metadata store or sampling)
+        # Fetching *all* metadata might be too slow/memory intensive
+        # Let's fetch a reasonable number of documents to get a representative sample
+        metadata_sample = collection.get(limit=20000, include=["metadatas"]) # Increase limit to cover all documents
+
+        if not metadata_sample or not metadata_sample.get("metadatas"):
+            logger.warning("No metadata found in collection to generate filters.")
+            # Return empty filters if collection is empty or has no metadata
+            return AvailableFilters(
+                newspapers=[],
+                locations=[],
+                subjects=[],
+                date_range=FilterInfo(min=None, max=None)
+            )
         
+        # Use sets for efficient collection of unique values
         newspapers = set()
         locations = set()
         subjects = set()
-        dates = set()
-        min_date: Optional[str] = None
-        max_date: Optional[str] = None
+        dates = []
 
-        if results and results["metadatas"]:
-             logger.info(f"Processing {len(results['metadatas'])} metadata records for filters.")
-             for metadata in results["metadatas"]:
-                if metadata:
-                    if newspaper := metadata.get("newspaper"): newspapers.add(newspaper)
-                    if date_str := metadata.get("date"): 
-                        # Basic date validation could be added here
-                        dates.add(date_str)
-                        if min_date is None or date_str < min_date: min_date = date_str
-                        if max_date is None or date_str > max_date: max_date = date_str
+        # --- DEBUG LOGGING: See raw newspaper names found --- 
+        raw_newspapers_found = [] 
+        # --- END DEBUG --- 
 
-                    # Safely parse locations and subjects stored as JSON strings
-                    locs = parse_json_metadata(metadata.get("locations"))
-                    for loc in locs: locations.add(loc)
-                    
-                    subjs = parse_json_metadata(metadata.get("subjects"))
-                    for subj in subjs: subjects.add(subj)
-        else:
-            logger.warning("No metadata found in collection to generate filters.")
+        for meta in metadata_sample["metadatas"]:
+            if meta:
+                newspaper_name = meta.get("newspaper") # Get the name
+                if newspaper_name:
+                    newspapers.add(newspaper_name)
+                    raw_newspapers_found.append(newspaper_name) # Add to raw list for logging
+                if meta.get("date"):
+                    dates.append(meta["date"])
+                # Safely parse JSON string lists for locations and subjects
+                loc_list = parse_json_metadata(meta.get("locations"))
+                subj_list = parse_json_metadata(meta.get("subjects"))
+                locations.update(loc_list)
+                subjects.update(subj_list)
 
-        # Sort and convert to lists
-        response_data = AvailableFilters(
-            newspapers=sorted(list(newspapers)),
-            locations=sorted(list(locations)),
-            subjects=sorted(list(subjects)),
+        # Determine min/max dates
+        min_date = min(dates) if dates else None
+        max_date = max(dates) if dates else None
+
+        # Sort lists for consistent frontend display
+        sorted_newspapers = sorted(list(newspapers))
+        sorted_locations = sorted(list(locations))
+        sorted_subjects = sorted(list(subjects))
+
+        # --- DEBUG LOGGING: Print all raw newspapers found --- 
+        logger.info(f"DEBUG: Raw newspapers found in sample: {raw_newspapers_found}")
+        # --- END DEBUG --- 
+
+        logger.info(f"Returning {len(sorted_newspapers)} newspapers, {len(sorted_locations)} locations, {len(sorted_subjects)} subjects.")
+        logger.info(f"Date range: {min_date} to {max_date}")
+
+        return AvailableFilters(
+            newspapers=sorted_newspapers,
+            locations=sorted_locations,
+            subjects=sorted_subjects,
             date_range=FilterInfo(min=min_date, max=max_date)
         )
-        logger.info("Filter options generated successfully.")
-        return response_data
-    
-    except HTTPException as http_exc:
-        raise http_exc
+
     except Exception as e:
-        logger.exception(f"Error getting available filters: {e}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving filter options: {e}")
+        logger.error(f"Error retrieving filters: {e}", exc_info=True) # Log traceback
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve filters: {str(e)}")
+
+# === Check and Index on Startup (Optional) ===
+# Simple check: Does the collection exist and have documents?
+# Note: This runs in the main process, potentially blocking startup.
+# Consider a background task or separate management command for production.
 
 if __name__ == "__main__":
-    import uvicorn
-    # Ensure ChromaDB client is initialized before starting Uvicorn if needed pre-flight
-    # try:
-    #     get_collection() 
-    # except HTTPException as e:
-    #     logger.critical(f"Failed to initialize ChromaDB connection on startup: {e.detail}")
-        # Decide if server should exit or run without DB connection
-        # exit(1) 
-    
-    logger.info("Starting Uvicorn server...")
-    uvicorn.run("api:app", host="0.0.0.0", port=5000, reload=True) # Add reload=True for dev
+    # This block is for running directly with uvicorn, not Docker typically
+    # For Docker, entrypoint/CMD handles startup
+    logger.info("Starting API server with Uvicorn...")
+    uvicorn.run(app, host="0.0.0.0", port=5000) # Use port 5000 for consistency
+    # Consider adding reload=True for local development only
+    # uvicorn.run("app.api:app", host="0.0.0.0", port=5000, reload=True)
