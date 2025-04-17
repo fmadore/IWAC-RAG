@@ -41,7 +41,7 @@
       }
     },
     {
-      "id": "o4-mini-2025-04-16",
+      "id": "o4-mini",
       "name": "OpenAI: ChatGPT o4-mini",
       "provider": "openai",
       "context_window": 128000,
