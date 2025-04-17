@@ -50,12 +50,14 @@ class OpenAIProvider(LLMProvider):
             "model": model_id,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens,
+            # Use max_completion_tokens for newer models like o4-mini
+            "max_completion_tokens": max_tokens,
             # Add other supported parameters from options if they exist
         }
 
         # Add any other OpenAI-specific options from the config if they are valid API parameters
         # Example: top_p, frequency_penalty, presence_penalty
+        # Ensure not to add max_tokens again if it was in options
         for key, value in options.items():
             if key not in ["temperature", "max_tokens"] and hasattr(openai.types.chat.CompletionCreateParamsBase, key):
                  # Basic check if the key might be a valid parameter

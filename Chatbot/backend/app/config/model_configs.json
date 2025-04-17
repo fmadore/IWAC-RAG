@@ -41,11 +41,21 @@
       }
     },
     {
+      "id": "gemini-2.0-flash-thinking-exp-01-21",
+      "name": "Gemini: 2.0 Flash Thinking (Experimental)",
+      "provider": "gemini",
+      "context_window": 1000000,
+      "temperature": 0.8,
+      "options": {
+        "maxOutputTokens": 8192
+      }
+    },
+    {
       "id": "o4-mini",
       "name": "OpenAI: ChatGPT o4-mini",
       "provider": "openai",
       "context_window": 128000,
-      "temperature": 0.3,
+      "temperature": 1,
       "options": {
         "max_tokens": 4096
       }
@@ -55,7 +65,7 @@
       "name": "Anthropic: Claude 3.5 Haiku",
       "provider": "anthropic",
       "context_window": 200000,
-      "temperature": 0.3,
+      "temperature": 0.8,
       "options": {
         "maxOutputTokens": 4096 
       }
