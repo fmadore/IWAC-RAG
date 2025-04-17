@@ -10,6 +10,12 @@ import os
 from datetime import datetime
 import logging
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from the project root .env file
+load_dotenv(Path(__file__).parents[2] / '.env')
+
 # Import our new ModelManager
 from app.models import model_manager
 

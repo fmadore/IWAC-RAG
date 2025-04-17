@@ -3,31 +3,9 @@ import logging
 from typing import Dict, Any
 from .base import LLMProvider
 import google.generativeai as genai
-from google.generativeai.types import GenerationConfig, SafetySetting, HarmCategory
-from google.api_core import exceptions as google_exceptions
+from google.generativeai import types # Explicitly import types
 
 logger = logging.getLogger(__name__)
-
-# Configure safety settings to be less restrictive
-# Adjust these as needed based on your use case and acceptable risk
-safety_settings = [
-    {
-        "category": HarmCategory.HARM_CATEGORY_HARASSMENT,
-        "threshold": SafetySetting.HarmBlockThreshold.BLOCK_NONE,
-    },
-    {
-        "category": HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-        "threshold": SafetySetting.HarmBlockThreshold.BLOCK_NONE,
-    },
-    {
-        "category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-        "threshold": SafetySetting.HarmBlockThreshold.BLOCK_NONE,
-    },
-    {
-        "category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        "threshold": SafetySetting.HarmBlockThreshold.BLOCK_NONE,
-    },
-]
 
 class GeminiProvider(LLMProvider):
     """
@@ -35,77 +13,109 @@ class GeminiProvider(LLMProvider):
     """
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
+        self.client = None # Initialize client as None
         if self.api_key:
             try:
-                genai.configure(api_key=self.api_key)
-                logger.info("GeminiProvider initialized and configured.")
+                # Use genai.Client for initialization
+                self.client = genai.Client(api_key=self.api_key)
+                # Test connection with a simple listing - optional but good practice
+                # self.client.list_models() # This would make init potentially blocking/async
+                logger.info("GeminiProvider initialized with genai.Client.")
             except Exception as e:
-                logger.error(f"Failed to configure Gemini SDK: {e}")
-                # Decide if initialization should fail or proceed without configuration
-                self.api_key = None # Mark as unconfigured
+                logger.error(f"Failed to initialize Gemini Client: {e}")
+                self.api_key = None # Mark as unconfigured if client fails
+                self.client = None
         else:
             logger.warning("GEMINI_API_KEY not found in environment.")
-            self.api_key = None
+            self.api_key = None # Ensure api_key is None if not found
 
     async def generate(self, prompt: str, model_id: str, options: Dict[str, Any]) -> str:
         """
-        Generate text using the google-genai SDK.
+        Generate text using the google-genai SDK via Client.
         """
-        if not self.validate_api_key():
-            raise Exception("Gemini API key not configured or SDK initialization failed")
+        # Check if the client was initialized successfully
+        if not self.client:
+            raise Exception("Gemini Client not initialized. Check API key and configuration.")
 
-        logger.info(f"Generating response with Gemini model: {model_id}")
+        logger.info(f"Generating response with Gemini model: {model_id} using google-genai SDK")
 
         try:
-            # Get the model instance
-            model = genai.GenerativeModel(model_id)
-
-            # Prepare generation config
-            sdk_options = {
+            # Prepare generation config using types.GenerationConfig
+            # Filter out None values explicitly for GenerationConfig arguments
+            gen_config_dict = {
                 "temperature": options.get("temperature", 0.3),
-                # Map maxOutputTokens if present in config
-                "max_output_tokens": options.get("maxOutputTokens"), 
-                # Add other potential mappings like top_p, top_k if needed
-                # "top_p": options.get("topP"),
-                # "top_k": options.get("topK"),
+                 # No default for max_output_tokens in GenerationConfig, handle None
             }
-            # Filter out None values, as the SDK expects explicit values or omission
-            sdk_options = {k: v for k, v in sdk_options.items() if v is not None}
-            generation_config = GenerationConfig(**sdk_options)
+            max_tokens = options.get("maxOutputTokens")
+            if max_tokens is not None:
+                gen_config_dict["max_output_tokens"] = int(max_tokens) # Ensure it's an int
 
-            # Generate content asynchronously
-            # The entire prompt constructed by ModelManager is sent as a single user message
-            response = await model.generate_content_async(
-                contents=prompt, 
-                generation_config=generation_config,
-                safety_settings=safety_settings # Apply configured safety settings
+            # Add other supported options if present, e.g., top_p, top_k
+            if options.get("topP") is not None:
+                 gen_config_dict["top_p"] = options.get("topP")
+            if options.get("topK") is not None:
+                 gen_config_dict["top_k"] = options.get("topK")
+            # Add stop sequences if provided
+            stop_sequences = options.get("stopSequences")
+            if stop_sequences and isinstance(stop_sequences, list):
+                gen_config_dict["stop_sequences"] = stop_sequences
+
+
+            generation_config = types.GenerationConfig(**gen_config_dict)
+
+
+            # Prepare contents in the required format (list of Content parts)
+            # For simple text prompt, structure it as user role
+            contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
+
+            # Model ID might need the 'models/' prefix depending on usage context
+            # The client methods generally handle this, but being explicit can be safer.
+            # If model_id already contains "models/", this won't hurt.
+            # If not, like "gemini-1.5-flash", it becomes "models/gemini-1.5-flash".
+            full_model_id = f"models/{model_id}" if not model_id.startswith("models/") else model_id
+
+            # Generate content asynchronously using the client
+            response = await self.client.generate_content_async(
+                model=full_model_id, # Use the full model ID
+                contents=contents,
+                generation_config=generation_config
+                # Add safety_settings and tools here if needed later
             )
 
-            # Extract the text response
-            # Handle potential lack of response or empty parts
+            # Extract the text response (structure remains similar)
             if response.candidates and response.candidates[0].content.parts:
-                answer = response.candidates[0].content.parts[0].text.strip()
-                logger.info("Gemini response received successfully via SDK.")
-                return answer
-            elif response.prompt_feedback.block_reason:
-                 block_reason = response.prompt_feedback.block_reason
-                 logger.error(f"Gemini request blocked. Reason: {block_reason}")
-                 raise Exception(f"Content blocked by Gemini API due to: {block_reason}")
+                # Check if parts exist before accessing
+                if response.candidates[0].content.parts:
+                    answer = response.candidates[0].content.parts[0].text.strip()
+                    logger.info("Gemini response received successfully via Client SDK.")
+                    return answer
+                else:
+                     logger.error(f"Gemini response candidate missing parts. Response: {response}")
+                     raise Exception("Gemini response candidate missing parts.")
+            elif hasattr(response, 'prompt_feedback') and getattr(response.prompt_feedback, 'block_reason', None):
+                block_reason = response.prompt_feedback.block_reason
+                # Get more details if available
+                block_details = ""
+                if hasattr(response.prompt_feedback, 'safety_ratings'):
+                    block_details = f" Safety Ratings: {response.prompt_feedback.safety_ratings}"
+                logger.error(f"Gemini request blocked. Reason: {block_reason}.{block_details}")
+                raise Exception(f"Content blocked by Gemini API due to: {block_reason}.{block_details}")
             else:
-                logger.error(f"Gemini response missing expected content. Response: {response}")
-                raise Exception("Failed to get valid response content from Gemini API.")
+                # Handle cases where response might be empty or malformed
+                logger.error(f"Gemini response missing expected content or blocked without specific reason. Response: {response}")
+                # Check for finish_reason if available
+                finish_reason = getattr(response.candidates[0], 'finish_reason', 'UNKNOWN') if response.candidates else 'NO_CANDIDATES'
+                if finish_reason != "STOP": # Should be STOP for successful generation
+                     raise Exception(f"Gemini generation finished unexpectedly. Reason: {finish_reason}. Response: {response}")
+                else: # Should not happen if candidate structure is correct, but as fallback
+                    raise Exception(f"Failed to get valid response content from Gemini API. Finish Reason: {finish_reason}. Response: {response}")
 
-        except google_exceptions.GoogleAPIError as e:
-            logger.error(f"Gemini SDK API error: {e}")
-            raise Exception(f"Error communicating with Gemini service via SDK: {e}")
+
         except Exception as e:
-            # Catch potential SDK-specific errors or unexpected issues
-            logger.exception(f"Unexpected error during Gemini SDK call: {e}")
-            raise Exception(f"Unexpected error with Gemini service via SDK: {e}")
+            logger.exception(f"Error during Gemini Client SDK call: {e}")
+            # Re-raise exceptions to be handled upstream, potentially adding context
+            raise Exception(f"Error interacting with Gemini service via Client SDK: {e}")
 
     def validate_api_key(self) -> bool:
-        """
-        Check if the Gemini API key was successfully configured.
-        """
-        # Check if the key was present and configuration succeeded
-        return self.api_key is not None
+        """Check if the Gemini API key is configured and client initialized."""
+        return self.api_key is not None and len(self.api_key) > 0 and self.client is not None
