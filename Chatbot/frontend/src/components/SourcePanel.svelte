@@ -15,7 +15,7 @@
 </script>
 
 <div class="source-panel">
-  <h3 class="panel-title">Sources</h3>
+  <h3 class="panel-title">Sources{#if sources.length > 0} ({sources.length}){/if}</h3>
   {#if sources.length > 0}
     <ul class="source-list">
       {#each sources as source (source.id)}
