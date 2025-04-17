@@ -38,9 +38,22 @@ function getConversationStyles(): string {
 		border-radius: 8px; 
 		word-wrap: break-word;
 	}
+	.message h4 {
+		margin-top: 0;
+		margin-bottom: 8px;
+		font-size: 0.9em;
+		font-weight: bold;
+		color: #555;
+	}
+	.message p {
+		margin-top: 0;
+		margin-bottom: 0.5em; /* Add space between paragraphs */
+	}
+	.message p:last-child {
+		margin-bottom: 0;
+	}
 	.user { 
 		background-color: #e1f5fe; 
-		text-align: right; 
 		margin-left: 40px; 
 	}
 	.assistant { 
@@ -136,11 +149,35 @@ export function saveConversationAsHtml(messages: ChatMessage[], lastSources: Sou
 		const roleClass = message.role;
 		const errorClass = message.isError ? ' error' : '';
 		htmlContent += `<div class="message ${roleClass}${errorClass}">`;
-		htmlContent += `<p>${escapeHtml(message.content)}</p>`;
+
+		// Add heading based on role
+		if (message.role === 'user') {
+			htmlContent += `<h4>Question:</h4>`;
+		} else if (message.role === 'assistant') {
+			htmlContent += `<h4>Answer:</h4>`;
+		}
+
+		// Process content for paragraphs
+		if (message.content) {
+			const escapedContent = escapeHtml(message.content);
+			const paragraphs = escapedContent.split('\n\n'); // Split by double newline
+			paragraphs.forEach(para => {
+				if (para.trim()) { // Avoid empty paragraphs
+					// Replace single newlines within a paragraph with <br> for line breaks
+					const formattedPara = para.replace(/\n/g, '<br>'); 
+					htmlContent += `<p>${formattedPara}</p>`;
+				}
+			});
+		} else if (message.isError) {
+			htmlContent += `<p><i>An error occurred.</i></p>`;
+		} else {
+			htmlContent += `<p><i>No content.</i></p>`;
+		}
+		
 		if (message.role === 'assistant' && message.query_time !== undefined) {
 			htmlContent += `<p class="meta">Query Time: ${message.query_time.toFixed(2)}s</p>`;
 		}
-		if (message.isError) {
+		if (message.isError && message.role !== 'assistant') { // Avoid duplicating error message if already shown
 			htmlContent += `<p class="meta error">Error occurred</p>`;
 		}
 		htmlContent += `</div>`;
@@ -149,7 +186,7 @@ export function saveConversationAsHtml(messages: ChatMessage[], lastSources: Sou
 	if (lastSources && lastSources.length > 0) {
 		htmlContent += `
 		<div class="sources-section">
-			<h2 class="sources-title">Sources for Last Response</h2>
+			<h2 class="sources-title">Sources for Last Response (${lastSources.length})</h2>
 			${lastSources.map(source => `
 				<div class="source-item">
 					<h3 class="source-title">${escapeHtml(source.title)}</h3>

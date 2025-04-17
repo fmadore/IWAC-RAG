@@ -36,7 +36,7 @@
           {:else}
              <!-- Fallback to ZMO database link -->
              <a href={`https://islam.zmo.de/s/afrique_ouest/item/${source.id}`} target="_blank" rel="noopener noreferrer" class="source-link">
-               View on ZMO Database (ID: {source.id})
+               View on Collection Islam Afrique de l'Ouest (ID: {source.id})
              </a>
           {/if}
         </li>
