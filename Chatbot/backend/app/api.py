@@ -248,26 +248,29 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
             include=["metadatas", "documents"] 
         )
         
-        # Process results
-        contexts = []
-        sources = []
+        # Process results - NOW focusing on getting unique relevant article IDs
+        # contexts = [] # No longer collecting chunk text here
+        sources = [] # Still collect source snippets for display
+        retrieved_metadata = [] # Collect metadata from retrieved chunks
+
         if results and results["ids"] and results["ids"][0]:
             logger.info(f"Retrieved {len(results['ids'][0])} chunks from ChromaDB.")
-            for doc, metadata, doc_id in zip(
+            for doc_text, metadata, doc_id in zip(
                 results["documents"][0],
                 results["metadatas"][0],
                 results["ids"][0]
             ):
-                # Use the full document text for the LLM context
-                contexts.append(doc)  # This is the full chunk text from ChromaDB
-                # Safely access metadata
+                # Store metadata for context building later
+                retrieved_metadata.append(metadata)
+
+                # Use the chunk document text for the source snippet
                 sources.append(Source(
                     id=metadata.get("article_id", doc_id), # Fallback to chunk id if article_id missing
                     title=metadata.get("title", "No Title"),
                     newspaper=metadata.get("newspaper"),
                     date=metadata.get("date"),
                     # url=metadata.get("url"), # Need to ensure URL is stored in metadata
-                    text_snippet=doc[:500] + "..." if len(doc) > 500 else doc # Longer snippet (500 chars)
+                    text_snippet=doc_text[:500] + "..." if len(doc_text) > 500 else doc_text # Snippet from chunk
                 ))
         else:
             logger.warning("No results found in ChromaDB for the query.")
@@ -279,22 +282,24 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
                 query_time=query_time
             )
 
-        context_text = "\n\n---\n\n".join(contexts)
+        # context_text = "\n\n---\n\n".join(contexts) # Removed - context built differently now
         
-        # Log the context chunks being sent to the LLM for debugging
-        logger.info(f"Sending {len(contexts)} context chunks to LLM for query: '{request.query}'")
-        for i, ctx in enumerate(contexts):
-            logger.info(f"Context chunk {i+1}: {ctx[:300]}{'...' if len(ctx) > 300 else ''}")
+        # Log the *metadata* being sent to the LLM for debugging
+        # logger.info(f"Sending {len(contexts)} context chunks to LLM for query: '{request.query}'")
+        # for i, ctx in enumerate(contexts):
+        #     logger.info(f"Context chunk {i+1}: {ctx[:300]}{'...' if len(ctx) > 300 else ''}")
+        logger.info(f"Sending metadata for {len(retrieved_metadata)} retrieved chunks to ModelManager for query: '{request.query}'")
 
         # === LLM Call Logic using our new ModelManager ===
         try:
             # Note: Prompt construction is now handled inside ModelManager
-            # Pass the raw query and contexts instead
+            # Pass the raw query and RETRIEVED METADATA instead of chunk text
             
             # Generate response using ModelManager
             answer = await model_manager.generate_response(
-                user_query=request.query, 
-                contexts=contexts, 
+                user_query=request.query,
+                # contexts=contexts, # Pass retrieved_metadata instead
+                retrieved_metadata=retrieved_metadata, 
                 model_id=request.model_name
             )
             logger.info(f"LLM response generated successfully.")

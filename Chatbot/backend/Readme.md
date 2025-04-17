@@ -1,46 +1,43 @@
 # IWAC RAG Chatbot: Backend Service
 
-This directory contains the code for the backend service of the IWAC RAG Chatbot, featuring a modular architecture that supports multiple LLM providers.
+This directory contains the code for the backend service of the IWAC RAG Chatbot. Its primary goal is to answer user questions based on a collection of newspaper articles, using a Retrieval-Augmented Generation (RAG) approach combined with various Large Language Models (LLMs).
 
 ## Architecture
 
-The backend uses a layered architecture with the following components:
+The backend uses a layered architecture designed for modularity, especially around LLM integration:
 
 ### 1. API Layer (`app/api.py`)
 
-The FastAPI application that exposes endpoints for:
-- `/query` - Main RAG endpoint for answering questions
-- `/models` - Lists available LLM models
-- `/filters` - Provides filter options based on document metadata
+- Provides the main web interface (using FastAPI) for the chatbot.
+- Exposes endpoints like `/query` (to ask questions), `/models` (to see available LLMs), and `/filters` (to refine searches).
+- Handles incoming requests, interacts with the data/model layers, and formats responses.
 
 ### 2. Model Layer (`app/models/`)
 
-A modular system for managing different LLM providers:
+- **Core Concept:** Manages interactions with different LLMs and constructs the information sent to them.
+- **ModelManager** (`app/models/__init__.py`): The central coordinator for the RAG process.
+  - **Loads Configuration:** Reads model details (like context window size) from `config/model_configs.json`.
+  - **Loads Full Articles:** On startup, it loads the entire content of the source articles (e.g., from `data/processed/input_articles.json`) into memory. This allows it to access the complete text of any article when needed.
+  - **Orchestrates Context Generation:** This is key to the current RAG strategy:
+    1. Receives metadata about relevant article *chunks* initially identified by the API layer (using ChromaDB).
+    2. Determines the most relevant *articles* based on these chunks (using a simple ranking for now).
+    3. Fetches the *full text* of these top articles from its in-memory store.
+    4. Carefully combines the full text of these articles into a single context block, ensuring the total size fits within the selected LLM's token limit.
+    5. Constructs the final prompt, inserting the full-article context alongside the user's question and instructions.
+  - **Routes to Provider:** Sends the final prompt to the appropriate LLM provider (Ollama, OpenAI, Gemini, Anthropic).
+  - *Trade-off:* Loading all articles increases memory usage but aims to provide richer, more complete context to the LLM compared to using only isolated chunks.
 
-- **ModelManager** (`app/models/__init__.py`): Central coordinator that:
-  - Loads model configurations from JSON
-  - Instantiates appropriate provider classes
-  - **Constructs the final LLM prompt**, incorporating retrieved context documents while respecting the model's token limit.
-  - Routes requests to the correct provider with the finalized prompt.
-  - Provides a unified interface for model operations
-
-- **Provider Classes**:
-  - `base.py` - Abstract base class defining the LLM provider interface
-  - `ollama_provider.py` - Implementation for local Ollama models
-  - `gemini_provider.py` - Implementation for Google's Gemini models (using google-genai SDK)
-  - `openai_provider.py` - Implementation for OpenAI's GPT models
-  - `anthropic_provider.py` - Implementation for Anthropic's Claude models
+- **Provider Classes** (`ollama_provider.py`, `openai_provider.py`, etc.):
+  - Each class handles the specifics of communicating with one type of LLM API (e.g., formatting requests, handling authentication, parsing responses).
+  - They implement a common `LLMProvider` interface (`base.py`) for consistency.
 
 ### 3. Configuration (`app/config/`)
 
-- `model_configs.json` - Defines available models with their settings:
-  - Context window sizes
-  - Temperature settings
-  - Provider-specific parameters
+- `model_configs.json`: Stores settings for each available LLM, like its ID, context window size, temperature, and any provider-specific options.
 
 ### 4. Data Processing (`scripts/`)
 
-- `index_to_chroma.py` - Tool for processing article data and creating vector embeddings in ChromaDB
+- `index_to_chroma.py`: A preparatory script. It reads the source articles, splits them into smaller *chunks*, generates vector embeddings for each chunk, and stores these chunks and their embeddings in the ChromaDB vector database. This indexed data is used for the *initial, fast retrieval* step.
 
 ## Setup & Installation
 
@@ -55,7 +52,7 @@ python -m nltk.downloader punkt
 
 ## Running the Indexer
 
-The indexer script populates the ChromaDB database.
+The indexer script prepares the ChromaDB database by processing articles into embeddable chunks. **This must be run before querying**, as it creates the data used for identifying relevant articles.
 
 **Via Docker Compose (Recommended):**
 Make sure your input JSON file (e.g., `../data/processed/input_articles.json`) is ready. Run the following from the main `Chatbot` directory:
@@ -80,9 +77,10 @@ The API server is started automatically when you run `docker-compose up` from th
 Ensure ChromaDB and your chosen LLM provider are running and accessible.
 ```bash
 # Navigate to the backend directory if not already there
-cd Chatbot/backend 
+cd Chatbot/backend
+# Ensure the full articles JSON is accessible at the expected path
 # Run uvicorn (adjust host/port/reload as needed)
-uvicorn app.api:app --host 0.0.0.0 --port 5000 --reload 
+uvicorn app.api:app --host 0.0.0.0 --port 5000 --reload
 ```
 
 ## Environment Variables
@@ -129,10 +127,16 @@ To add a new model to the system:
 
 ### `/query` (POST)
 
-Main endpoint for RAG query processing.
+Handles user questions using the RAG process. The workflow aims to balance precise retrieval with comprehensive context:
 
-Dynamically retrieves more documents (adjusts `top_k`) for models with large context windows if a low `top_k` is requested.
-Handles final prompt construction and context truncation based on token limits internally.
+1.  **Initial Retrieval (Chunk-based):** The user's query is compared against the indexed *chunks* in ChromaDB to quickly find the most semantically similar text segments. This identifies *potentially* relevant articles.
+2.  **Metadata Transfer:** The metadata (including article IDs) of these top-matching chunks is passed to the `ModelManager`.
+3.  **Full Article Selection:** The `ModelManager` identifies the unique articles these chunks belong to and selects the top-ranked ones.
+4.  **Context Building (Full Article):** The `ModelManager` retrieves the *complete text* of the selected articles from its in-memory store.
+5.  **Token-Aware Concatenation:** It carefully combines the full text of these articles, adding one article at a time until the context nears the token limit of the chosen LLM.
+6.  **LLM Prompting:** The final prompt, containing the user query and the concatenated *full article texts* as context, is sent to the LLM for answer generation.
+
+*Note:* For models with large context windows, the system retrieves more initial chunks (step 1) to provide a wider selection of potentially relevant articles for step 3.
 
 **Request:**
 ```json
@@ -155,7 +159,7 @@ Handles final prompt construction and context truncation based on token limits i
 {
   "answer": "The main topics of the Dakar conference included...",
   "sources": [
-    {
+    { // Sources still show snippets from the *initially retrieved chunks* for quick reference
       "id": "article_001_chunk_0",
       "title": "Discussions on Islamic Education in Dakar",
       "newspaper": "Le Réveil Islamique",
@@ -183,21 +187,14 @@ Returns available models that can be used with the `/query` endpoint.
       "id": "deepseek-r1:7b",
       "name": "Ollama: Deepseek R1 7B"
     },
-    {
-      "id": "gemini-pro",
-      "name": "Gemini: Pro"
-    },
-    {
-      "id": "claude-3-5-haiku-20240620",
-      "name": "Anthropic: Claude 3.5 Haiku"
-    }
+    // ... other configured models
   ]
 }
 ```
 
 ### `/filters` (GET)
 
-Returns available filter options for use with the `/query` endpoint.
+Returns available filter options for use with the `/query` endpoint, based on metadata found in the indexed chunks.
 
 **Response:**
 ```json
@@ -224,7 +221,7 @@ class LLMProvider(ABC):
     async def generate(self, prompt: str, model_id: str, options: Dict[str, Any]) -> str:
         """Generate a response from the LLM"""
         pass
-    
+
     @abstractmethod
     def validate_api_key(self) -> bool:
         """Validate API key availability"""
@@ -249,9 +246,7 @@ Each provider handles:
 
 2. **LLM Provider Issues**:
    - For Ollama: Ensure Ollama service is running and models are downloaded
-   - For Gemini/OpenAI: Verify API key is correctly set in `.env`
-   - For Gemini/OpenAI: Verify `GEMINI_API_KEY` or `OPENAI_API_KEY` (as appropriate) is correctly set in `.env`.
-   - For Anthropic: Verify `ANTHROPIC_API_KEY` is correctly set in `.env`.
+   - For Gemini/OpenAI/Anthropic: Verify the respective API key (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) is correctly set in `.env`.
    - Check `MODEL_NAME` matches an existing model in your provider
 
 3. **Missing NLTK Data**:
@@ -261,5 +256,9 @@ Each provider handles:
      ```
 
 4. **Out of Memory Errors**:
-   - Reduce batch size in the indexing script
-   - Adjust Docker container memory limits
+   - The backend now loads the full article JSON into memory on startup. If `input_articles.json` is very large, the container might exceed its memory limits. Monitor usage or consider alternative data access strategies (e.g., database lookups) if necessary.
+   - Indexing might also consume memory; reduce batch size if needed.
+   - Adjust Docker container memory limits in `docker-compose.yml`.
+
+5. **File Not Found for Full Articles**:
+   - Verify `input_articles.json` is correctly mounted into the container (default: `./data:/app/data` in `docker-compose.yml`) and accessible at the path expected by `ModelManager` (`/app/data/processed/input_articles.json` by default).
