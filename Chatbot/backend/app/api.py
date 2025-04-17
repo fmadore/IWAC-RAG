@@ -220,22 +220,25 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
         if model_config:
             context_window = model_config.get("context_window", 0)
             LARGE_CONTEXT_THRESHOLD = 100000  # 100k tokens threshold for large context
-            ADJUSTED_K_FOR_LARGE_CONTEXT = 50 # Default k for large context models
+            # Increase n_results significantly for large context models
+            ADJUSTED_K_FOR_LARGE_CONTEXT = 200 
 
-            if context_window >= LARGE_CONTEXT_THRESHOLD and request.top_k <= 10:
-                n_results = ADJUSTED_K_FOR_LARGE_CONTEXT
-                logger.info(f"Model {selected_model_id} has large context ({context_window}). Adjusting retrieval to {n_results} documents as requested k ({request.top_k}) was low.")
+            if context_window >= LARGE_CONTEXT_THRESHOLD:
+                # Check if user requested a low k, if so, use the adjusted high k
+                if request.top_k <= 10: # Or some other threshold indicating user didn't specifically ask for many
+                    n_results = ADJUSTED_K_FOR_LARGE_CONTEXT
+                    logger.info(f"Model {selected_model_id} has large context ({context_window}). Adjusting retrieval to {n_results} documents as requested k ({request.top_k}) was low.")
+                else:
+                    # If user asked for more than 10, respect their request (up to a reasonable limit if needed)
+                    n_results = request.top_k 
+                    logger.info(f"Using user-requested top_k={request.top_k} for large context model {selected_model_id}.")
             else:
                 # Use user's requested k or default if context isn't large
+                n_results = request.top_k
                 logger.info(f"Using requested/default top_k={request.top_k} for model {selected_model_id} (context: {context_window}).")
         else:
             logger.warning(f"Could not find config for model {selected_model_id}. Using requested top_k={request.top_k}.")
         
-        # Dynamically increase n_results for Gemini models to maximize context window
-        if selected_model_id and selected_model_id.startswith("gemini"):
-            n_results = 1000  # Gemini can handle huge context windows; adjust as needed
-            logger.info(f"Gemini model detected. Setting n_results to {n_results} to maximize context window.")
-
         logger.info(f"Querying ChromaDB with n_results: {n_results}")
         results = collection.query(
             query_texts=[request.query],
