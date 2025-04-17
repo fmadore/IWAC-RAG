@@ -32,7 +32,9 @@
               View Original (ID: {source.id})
             </a>
           {:else}
-             <p class="source-id-only">(ID: {source.id})</p>
+             <a href={`https://islam.zmo.de/s/afrique_ouest/item/${source.id}`} target="_blank" rel="noopener noreferrer" class="source-link">
+               View on ZMO Database (ID: {source.id})
+             </a>
           {/if}
         </li>
       {/each}

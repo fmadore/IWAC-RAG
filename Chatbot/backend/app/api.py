@@ -296,13 +296,30 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
             # Pass the raw query and RETRIEVED METADATA instead of chunk text
             
             # Generate response using ModelManager
-            answer = await model_manager.generate_response(
+            answer, used_article_ids = await model_manager.generate_response(
                 user_query=request.query,
-                # contexts=contexts, # Pass retrieved_metadata instead
-                retrieved_metadata=retrieved_metadata, 
+                retrieved_metadata=retrieved_metadata,
                 model_id=request.model_name
             )
             logger.info(f"LLM response generated successfully.")
+            logger.info(f"Actual articles used for context: {used_article_ids}")
+
+            # Filter sources to include only those whose articles were actually used
+            final_sources = []
+            added_source_ids = set()
+            if used_article_ids:
+                for source in sources: # Iterate through original sources (derived from chunks)
+                    # Use the article_id from the source object
+                    article_id = source.id # Assuming source.id holds the article_id
+                    if article_id in used_article_ids and article_id not in added_source_ids:
+                        final_sources.append(source)
+                        added_source_ids.add(article_id)
+            else:
+                logger.warning("No specific article IDs were reported as used for context.")
+                # Optionally decide what to show if no articles were used - maybe none?
+                # Or show the original top sources as a fallback?
+                # For now, let's return an empty list if used_article_ids is empty
+                final_sources = []
 
         except Exception as e:
             logger.error(f"Error during LLM response generation: {e}")
@@ -314,7 +331,7 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
         
         return QueryResponse(
             answer=answer or "No answer generated.", # Fallback answer
-            sources=sources,
+            sources=final_sources,
             query_time=query_time
         )
     

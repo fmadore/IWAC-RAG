@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 
 try:
@@ -151,18 +151,20 @@ class ModelManager:
         """
         return self.providers.get(provider_name)
     
-    async def generate_response(self, user_query: str, retrieved_metadata: List[Dict[str, Any]], model_id: Optional[str] = None) -> str:
+    async def generate_response(self, user_query: str, retrieved_metadata: List[Dict[str, Any]], model_id: Optional[str] = None) -> Tuple[str, List[str]]:
         """
-        Generate a response using the specified model
-        
+        Generate a response using the specified model and return the answer and used article IDs.
+
         Args:
             user_query: The user's original query.
             retrieved_metadata: Metadata list from the top N retrieved chunks.
             model_id: ID of the model to use (or default if None)
-            
+
         Returns:
-            The generated response text
-            
+            A tuple containing:
+                - The generated response text (str)
+                - A list of article IDs actually used in the context (List[str])
+
         Raises:
             Exception: If the model or provider is not found or generation fails
         """
@@ -222,23 +224,77 @@ class ModelManager:
         output_buffer = options.get("maxOutputTokens", options.get("max_tokens", 1024)) 
         max_prompt_tokens = max_model_tokens - output_buffer
 
-        # Define the base prompt structure without context
-        # base_prompt_template = f"""Vous êtes un assistant utile pour la Collection Islam Afrique de l'Ouest (IWAC).
-        # Votre tâche est de répondre à la question de l'utilisateur en vous basant *principalement* sur les informations contenues dans les documents de contexte suivants.
-        # Lisez attentivement le contexte et synthétisez une réponse cohérente et analytique dans vos propres mots.
-        # Vous pouvez synthétiser une réponse même si elle n'est pas explicitement formulée dans un seul passage, tant que les éléments sont présents dans le contexte.
-        # Ne vous contentez pas de citer des passages du contexte, sauf si cela est essentiel pour la clarté. Si aucune information pertinente n'est trouvée dans le contexte, indiquez-le clairement.
-        # Soyez concis dans votre réponse. Ne faites pas référence aux documents de contexte eux-mêmes dans votre réponse.
+        # Calculate tokens for the base prompt (excluding the context part)
+        base_prompt_tokens = len(encoding.encode(f"""Vous êtes IWAC Chat Explorer, un assistant IA pour la Collection Islam Afrique de l'Ouest (IWAC). Votre objectif est de fournir des réponses complètes, rigoureuses, engageantes et analytiques aux questions sur l'islam en Afrique de l'Ouest, en vous basant sur le contexte fourni.
 
-        # Context:
-        # {{context_section}}
+Fonctionnalités clés :
+1. Répondez dans la même langue que la question de l'utilisateur.
+2. Fournissez des réponses extrêmement détaillées et bien structurées, en utilisant des sauts de ligne entre les paragraphes pour une meilleure lisibilité.
+3. Offrez des repères temporels détaillés dans vos réponses pour situer les événements et les développements dans leur contexte historique.
+4. Utilisez le maximum de tokens disponibles pour formuler les réponses les plus complètes possibles.
+5. Ne citez pas ou ne mentionnez pas explicitement les sources utilisées. Le système fournira séparément les informations sur les sources à l'utilisateur.
+6. Fournissez une analyse approfondie, incluant le contexte historique, les tendances actuelles et les implications futures potentielles lorsque cela est pertinent.
+7. Incluez des exemples spécifiques, des études de cas et des analyses comparatives entre différentes régions ou périodes lorsque cela est applicable.
+8. Discutez des différentes perspectives ou interprétations sur le sujet, si elles existent dans le contexte fourni.
+9. Concluez par des questions stimulantes ou des pistes d'exploration supplémentaires liées au sujet.
 
-        # User question: {user_query}
+Rappelez-vous de maintenir la rigueur académique tout en présentant les informations de manière engageante et accessible. Vos réponses doivent non seulement informer, mais aussi encourager une enquête plus approfondie et une réflexion critique sur le sujet. Basez vos réponses sur le contexte fourni sans référencer ou citer explicitement les sources. Si vous n'êtes pas sûr d'une information, indiquez-le clairement dans votre réponse.
 
-        # Answer:"""
+Context:
+{{context_section}}
 
-        # New, more detailed prompt template
-        base_prompt_template = f"""Vous êtes IWAC Chat Explorer, un assistant IA pour la Collection Islam Afrique de l'Ouest (IWAC). Votre objectif est de fournir des réponses complètes, rigoureuses, engageantes et analytiques aux questions sur l'islam en Afrique de l'Ouest, en vous basant sur le contexte fourni.
+User question: {user_query}
+
+Answer:"""))
+
+        # 3. Identify Relevant Articles from Metadata
+        ranked_article_ids = []
+        seen_article_ids = set()
+        if not self.full_articles:
+             logger.warning("Full articles dictionary is empty. Cannot use full article context.")
+        else:
+            for meta in retrieved_metadata:
+                article_id = meta.get("article_id")
+                if article_id and article_id in self.full_articles and article_id not in seen_article_ids:
+                    ranked_article_ids.append(article_id)
+                    seen_article_ids.add(article_id)
+        logger.info(f"Identified {len(ranked_article_ids)} unique relevant articles from {len(retrieved_metadata)} chunks.")
+
+        # 4. Add Full Article Content Iteratively
+        included_articles_content = []
+        used_article_ids = []
+        current_context_tokens = 0
+        final_context_str = ""
+        separator = "\n\n--- ARTICLE START ---\n\n"
+        num_articles_included = 0
+
+        for article_id in ranked_article_ids:
+            article_data = self.full_articles.get(article_id)
+            if not article_data or not article_data.get("content"):
+                logger.warning(f"Skipping article {article_id}: No content found.")
+                continue
+
+            article_content = article_data["content"] # Get the full content
+            article_title = article_data.get("title", "Untitled")
+            article_meta_header = f"Title: {article_title}\n---\n"
+            full_text_to_add = (separator + article_meta_header + article_content)
+            
+            if not included_articles_content:
+                 full_text_to_add = article_meta_header + article_content
+
+            article_tokens = len(encoding.encode(full_text_to_add))
+
+            if base_prompt_tokens + current_context_tokens + article_tokens <= max_prompt_tokens:
+                included_articles_content.append(full_text_to_add)
+                current_context_tokens += article_tokens
+                num_articles_included += 1
+                used_article_ids.append(article_id)
+            else:
+                logger.warning(f"Context truncated for model {model_id}. Stopped after {num_articles_included}/{len(ranked_article_ids)} articles due to token limit ({max_prompt_tokens} prompt tokens max). Last article ({article_id}) considered was too large ({article_tokens} tokens).)")
+                break
+
+        final_context_str = "".join(included_articles_content)
+        final_prompt = f"""Vous êtes IWAC Chat Explorer, un assistant IA pour la Collection Islam Afrique de l'Ouest (IWAC). Votre objectif est de fournir des réponses complètes, rigoureuses, engageantes et analytiques aux questions sur l'islam en Afrique de l'Ouest, en vous basant sur le contexte fourni.
 
 Fonctionnalités clés :
 1. Répondez dans la même langue que la question de l'utilisateur.
@@ -259,66 +315,17 @@ Context:
 User question: {user_query}
 
 Answer:"""
-
-        # Calculate tokens for the base prompt (excluding the context part)
-        base_prompt_tokens = len(encoding.encode(base_prompt_template.replace("{{context_section}}", "")))
-
-        # 3. Identify Relevant Articles from Metadata
-        ranked_article_ids = []
-        seen_article_ids = set()
-        if not self.full_articles:
-             logger.warning("Full articles dictionary is empty. Cannot use full article context.")
-        else:
-            for meta in retrieved_metadata:
-                article_id = meta.get("article_id")
-                if article_id and article_id in self.full_articles and article_id not in seen_article_ids:
-                    ranked_article_ids.append(article_id)
-                    seen_article_ids.add(article_id)
-        logger.info(f"Identified {len(ranked_article_ids)} unique relevant articles from {len(retrieved_metadata)} chunks.")
-
-        # 4. Add Full Article Content Iteratively
-        included_articles_content = []
-        current_context_tokens = 0
-        final_context_str = ""
-        separator = "\n\n--- ARTICLE START ---\n\n"
-        num_articles_included = 0
-
-        for article_id in ranked_article_ids:
-            article_data = self.full_articles.get(article_id)
-            if not article_data or not article_data.get("content"):
-                logger.warning(f"Skipping article {article_id}: No content found.")
-                continue
-
-            article_content = article_data["content"] # Get the full content
-            article_title = article_data.get("title", "Untitled")
-            article_meta_header = f"Title: {article_title}\n---\n"
-            full_text_to_add = (separator + article_meta_header + article_content)
-            
-            # Add separator only if we already have content
-            if not included_articles_content:
-                 full_text_to_add = article_meta_header + article_content # No separator for the first one
-
-            article_tokens = len(encoding.encode(full_text_to_add))
-
-            if base_prompt_tokens + current_context_tokens + article_tokens <= max_prompt_tokens:
-                included_articles_content.append(full_text_to_add)
-                current_context_tokens += article_tokens
-                num_articles_included += 1
-            else:
-                logger.warning(f"Context truncated for model {model_id}. Stopped after {num_articles_included}/{len(ranked_article_ids)} articles due to token limit ({max_prompt_tokens} prompt tokens max). Last article ({article_id}) considered was too large ({article_tokens} tokens).)")
-                break # Stop adding articles if limit is reached
-
-        final_context_str = "".join(included_articles_content)
-        final_prompt = base_prompt_template.replace("{{context_section}}", final_context_str if final_context_str else "No context available.")
+        final_prompt = final_prompt.replace("{{context_section}}", final_context_str if final_context_str else "No context available.")
         final_prompt_token_count = len(encoding.encode(final_prompt))
 
-        logger.info(f"Constructed final prompt with {num_articles_included} full articles, {final_prompt_token_count} tokens (limit: {max_prompt_tokens}).")
+        logger.info(f"Constructed final prompt with {num_articles_included} full articles (IDs: {used_article_ids}), {final_prompt_token_count} tokens (limit: {max_prompt_tokens}).")
 
         # --- End NEW CONTEXT BUILDING --- 
 
         # Generate response
         try:
-            return await provider.generate(final_prompt, model_id, options)
+            answer = await provider.generate(final_prompt, model_id, options)
+            return answer, used_article_ids
         except Exception as e:
             logger.error(f"Error generating response with {model_id}: {e}")
             raise
