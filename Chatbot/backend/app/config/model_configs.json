@@ -47,7 +47,7 @@
       "context_window": 128000,
       "temperature": 0.3,
       "options": {
-        "max_tokens": 16384
+        "max_tokens": 4096
       }
     },
     {
