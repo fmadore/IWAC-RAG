@@ -41,13 +41,13 @@
       }
     },
     {
-      "id": "gpt-3.5-turbo",
-      "name": "OpenAI: GPT-3.5 Turbo",
+      "id": "o4-mini-2025-04-16",
+      "name": "OpenAI: ChatGPT o4-mini",
       "provider": "openai",
-      "context_window": 16385,
+      "context_window": 128000,
       "temperature": 0.3,
       "options": {
-        "max_tokens": 4096
+        "max_tokens": 16384
       }
     },
     {
