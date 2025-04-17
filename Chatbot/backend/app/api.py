@@ -10,6 +10,7 @@ import os
 from datetime import datetime
 import logging
 import uvicorn
+import re # Import regex module
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -378,18 +379,28 @@ def get_available_filters(collection: chromadb.Collection = Depends(get_collecti
         subjects = set()
         dates = []
 
-        # --- DEBUG LOGGING: See raw newspaper names found --- 
-        raw_newspapers_found = [] 
+        # --- Remove DEBUG LOGGING --- 
+        # raw_newspapers_found = [] 
         # --- END DEBUG --- 
+
+        invalid_date_formats_found = set() # To log unique invalid formats
+
+        date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$") # Regex for YYYY-MM-DD
 
         for meta in metadata_sample["metadatas"]:
             if meta:
-                newspaper_name = meta.get("newspaper") # Get the name
+                newspaper_name = meta.get("newspaper")
                 if newspaper_name:
                     newspapers.add(newspaper_name)
-                    raw_newspapers_found.append(newspaper_name) # Add to raw list for logging
-                if meta.get("date"):
-                    dates.append(meta["date"])
+                    # raw_newspapers_found.append(newspaper_name) # Removed debug line
+                
+                date_str = meta.get("date")
+                if date_str: # Check if date exists
+                    if date_pattern.match(date_str): # Check if it matches YYYY-MM-DD
+                        dates.append(date_str)
+                    else:
+                        invalid_date_formats_found.add(str(date_str)) # Log invalid format found
+
                 # Safely parse JSON string lists for locations and subjects
                 loc_list = parse_json_metadata(meta.get("locations"))
                 subj_list = parse_json_metadata(meta.get("subjects"))
@@ -405,12 +416,16 @@ def get_available_filters(collection: chromadb.Collection = Depends(get_collecti
         sorted_locations = sorted(list(locations))
         sorted_subjects = sorted(list(subjects))
 
-        # --- DEBUG LOGGING: Print all raw newspapers found --- 
-        logger.info(f"DEBUG: Raw newspapers found in sample: {raw_newspapers_found}")
+        # --- Remove DEBUG LOGGING --- 
+        # logger.info(f"DEBUG: Raw newspapers found in sample: {raw_newspapers_found}")
         # --- END DEBUG --- 
 
+        # Log if any invalid date formats were skipped
+        if invalid_date_formats_found:
+            logger.warning(f"Skipped the following non 'YYYY-MM-DD' date formats found in metadata: {list(invalid_date_formats_found)}")
+
         logger.info(f"Returning {len(sorted_newspapers)} newspapers, {len(sorted_locations)} locations, {len(sorted_subjects)} subjects.")
-        logger.info(f"Date range: {min_date} to {max_date}")
+        logger.info(f"Date range derived from valid dates: {min_date} to {max_date}")
 
         return AvailableFilters(
             newspapers=sorted_newspapers,
