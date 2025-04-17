@@ -22,7 +22,7 @@
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import YearSlider from './YearSlider.svelte';
 
   export let options: FilterOptions;
@@ -38,14 +38,43 @@
   let selectedLocations = currentFilters.locations || [];
   let selectedSubjects = currentFilters.subjects || [];
 
-  // Available models (can be fetched or configured later)
-  const availableModels = [
-    { id: 'gemma3:4b', name: 'Ollama: Gemma3 4B' },
-    { id: 'deepseek-r1:7b', name: 'Ollama: Deepseek R1 7B' },
-    { id: 'gemini-2.0-flash', name: 'Gemini: 2.0 Flash' },
-    { id: 'gemini-pro', name: 'Gemini: Pro' },
-    // Add more models here as needed
-  ];
+  // State for available models - populated dynamically
+  let availableModels: { id: string; name: string }[] = [];
+  let modelsLoading = true;
+  let modelsError: string | null = null;
+
+  // Fetch models when component mounts
+  onMount(async () => {
+    modelsLoading = true;
+    modelsError = null;
+    const apiUrl = import.meta.env.VITE_API_URL; // Get API URL from env
+    if (!apiUrl) {
+      console.error("VITE_API_URL is not defined!");
+      modelsError = "API URL not configured.";
+      modelsLoading = false;
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/models`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      availableModels = data.models || [];
+      // Optionally set default model to the first one fetched if none is selected
+      if (availableModels.length > 0 && !selectedModel) {
+          selectedModel = availableModels[0].id;
+      }
+    } catch (error) {
+      console.error('Error fetching models:', error);
+      modelsError = 'Failed to load models.';
+      availableModels = [{ id: 'gemma3:4b', name: 'Default (Loading Failed)' }]; // Provide a fallback
+      selectedModel = 'gemma3:4b'; // Fallback model
+    } finally {
+      modelsLoading = false;
+    }
+  });
 
   // Helper function to get year from date string (YYYY-MM-DD)
   function getYearFromDate(dateString?: string): number | undefined {
@@ -157,11 +186,26 @@
   <!-- Model Selection -->
   <div class="form-section">
     <label for="model-select" class="input-label">Language Model</label>
-    <select id="model-select" bind:value={selectedModel} class="select-input">
-      {#each availableModels as model}
-        <option value={model.id}>{model.name}</option>
-      {/each}
-    </select>
+    {#if modelsLoading}
+      <p class="loading-text">Loading models...</p>
+    {:else if modelsError}
+      <p class="error-text">{modelsError}</p>
+      <!-- Render select with fallback -->
+      <select id="model-select" bind:value={selectedModel} class="select-input" disabled={availableModels.length === 0}>
+        {#each availableModels as model}
+          <option value={model.id}>{model.name}</option>
+        {/each}
+      </select>
+    {:else}
+      <select id="model-select" bind:value={selectedModel} class="select-input" disabled={availableModels.length === 0}>
+        {#if availableModels.length === 0}
+          <option value="" disabled>No models available</option>
+        {/if}
+        {#each availableModels as model}
+          <option value={model.id}>{model.name}</option>
+        {/each}
+      </select>
+    {/if}
   </div>
 
   <!-- Date Range -> Year Range Slider -->
@@ -314,6 +358,17 @@
      /* Replaces text-sm text-gray-500 */
     font-size: 0.875rem;
     color: #718096;
+  }
+
+  .loading-text,
+  .error-text {
+    font-size: 0.875rem;
+    color: #718096;
+    padding: 0.5rem 0;
+  }
+
+  .error-text {
+      color: #c53030; /* text-red-700 */
   }
 
   .button-container {
