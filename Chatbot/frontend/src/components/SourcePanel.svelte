@@ -26,7 +26,7 @@
               {#if source.newspaper}{source.newspaper}{/if}{#if source.newspaper && source.date}, {/if}{#if source.date}{source.date}{/if}
             </p>
           {/if}
-          <p class="source-snippet">"{source.text_snippet}"</p>
+          <p class="source-snippet">"${source.text_snippet}"</p>
           
           {#if source.url && source.url.trim() !== ''}
             <!-- Link to original URL if available -->
@@ -35,8 +35,9 @@
             </a>
           {:else}
              <!-- Fallback to ZMO database link -->
-             <a href={`https://islam.zmo.de/s/afrique_ouest/item/${source.id}`} target="_blank" rel="noopener noreferrer" class="source-link">
-               View on Collection Islam Afrique de l'Ouest (ID: {source.id})
+             {@const displayId = source.id.replace('article_', '')}
+             <a href={`https://islam.zmo.de/s/afrique_ouest/item/${displayId}`} target="_blank" rel="noopener noreferrer" class="source-link">
+               View on Collection Islam Afrique de l'Ouest (ID: {displayId})
              </a>
           {/if}
         </li>

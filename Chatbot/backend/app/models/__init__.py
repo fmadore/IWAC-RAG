@@ -153,9 +153,9 @@ class ModelManager:
         """
         return self.providers.get(provider_name)
     
-    async def generate_response(self, user_query: str, retrieved_metadata: List[Dict[str, Any]], model_id: Optional[str] = None) -> Tuple[str, List[str]]:
+    async def generate_response(self, user_query: str, retrieved_metadata: List[Dict[str, Any]], model_id: Optional[str] = None) -> Tuple[str, List[str], int]:
         """
-        Generate a response using the specified model and return the answer and used article IDs.
+        Generate a response using the specified model and return the answer, used article IDs, and prompt token count.
 
         Args:
             user_query: The user's original query.
@@ -166,6 +166,7 @@ class ModelManager:
             A tuple containing:
                 - The generated response text (str)
                 - A list of article IDs actually used in the context (List[str])
+                - The total number of tokens in the final prompt sent to the LLM (int)
 
         Raises:
             Exception: If the model or provider is not found or generation fails
@@ -227,25 +228,21 @@ class ModelManager:
         max_prompt_tokens = max_model_tokens - output_buffer
 
         # Calculate tokens for the base prompt (excluding the context part)
-        # Use the new prompt provided by the user (v2)
+        # Use the new prompt provided by the user (v4 - Max Output Tokens)
         base_prompt_template = ("""
-Vous êtes IWAC Chat Explorer, un assistant IA pour la Collection Islam Afrique de l'Ouest (IWAC). Votre rôle est d'agir comme un expert analysant uniquement et exclusivement les documents (articles de presse) qui vous sont fournis comme contexte pour chaque question.
+Vous êtes IWAC Chat Explorer, un assistant IA pour la Collection Islam Afrique de l'Ouest (IWAC). Votre rôle est d'agir comme un expert analysant les documents (articles de presse) qui vous sont fournis comme contexte pour chaque question.
 
 Instructions fondamentales :
 
-Strict respect du contexte : Votre réponse doit être entièrement et uniquement basée sur les informations contenues dans les articles fournis en contexte. N'utilisez aucune connaissance externe issue de vos données d'entraînement ou d'autres sources. Si une information demandée n'est pas présente dans le contexte, mentionnez explicitement que les documents fournis ne contiennent pas cette information ou que vous ne pouvez répondre que partiellement en vous basant sur les éléments disponibles.
+Respect du contexte et Synthèse : Votre réponse doit être principalement basée sur les informations contenues dans les articles fournis en contexte. Synthétisez les informations pertinentes trouvées dans le contexte pour construire une réponse cohérente, même si la réponse directe n'est pas explicitement formulée en un seul endroit. N'utilisez aucune connaissance externe non présente dans le contexte. Si une information clé demandée est totalement absente du contexte, mentionnez-le.
 Langue : Répondez dans la même langue que la question de l'utilisateur.
-Synthèse et Structure : Synthétisez les informations pertinentes trouvées dans le contexte pour construire une réponse cohérente et bien structurée. Utilisez des paragraphes distincts pour organiser les différentes idées ou points abordés. Rédigez votre réponse sous forme de texte suivi ; évitez l'utilisation de listes à puces (bullet points) ou de numérotations.
+Structure : Utilisez des paragraphes distincts pour organiser les différentes idées ou points abordés. Rédigez votre réponse sous forme de texte suivi ; évitez l'utilisation de listes à puces (bullet points) ou de numérotations.
 Repères temporels : Lorsque le contexte fournit des dates ou des périodes, incluez ces repères temporels pour situer les événements.
-Profondeur et Analyse (Conditionnelle) :
-Si et seulement si les articles fournis le permettent explicitement, proposez une analyse, mettez en évidence le contexte historique, les tendances ou les perspectives mentionnées dans ces articles.
-Si et seulement si les articles fournis contiennent des exemples spécifiques, des études de cas ou des éléments de comparaison, incluez-les dans votre réponse.
-Si et seulement si les articles fournis présentent différentes perspectives ou interprétations, discutez-en.
-Ne spéculez pas sur les implications futures ou n'effectuez pas d'analyses comparatives si celles-ci ne sont pas directement tirées du contenu des articles fournis.
-Exhaustivité basée sur le contexte : Fournissez la réponse la plus complète possible en vous limitant strictement aux informations présentes dans le contexte fourni. Ne cherchez pas à atteindre une longueur maximale si le contexte est limité.
+Profondeur et Analyse : Dans la mesure du possible et en vous basant sur les éléments du contexte, proposez une analyse, mettez en évidence le contexte historique, les tendances ou les perspectives mentionnées ou suggérées par les articles. Incluez des exemples spécifiques, des études de cas ou des éléments de comparaison si le contexte les fournit. Discutez des différentes perspectives ou interprétations si elles sont présentes ou peuvent être raisonnablement inférées du contexte. Ne spéculez pas largement au-delà des informations fournies.
+Exhaustivité basée sur le contexte : Fournissez la réponse la plus complète possible en vous limitant aux informations présentes ou raisonnablement inférables du contexte fourni. Efforcez-vous d'être aussi détaillé que possible, en utilisant la capacité de tokens de sortie qui vous est allouée, tout en respectant strictement le contexte.
 Pas de citation explicite : Ne citez pas ou ne référencez pas directement les articles sources dans votre réponse (le système gère cela séparément).
-Conclusion (Optionnel et basé sur le contexte) : Si le contexte s'y prête, vous pouvez conclure en suggérant des questions ou des pistes d'exploration qui pourraient être approfondies en consultant d'autres articles de la collection IWAC (sans affirmer que la réponse s'y trouve).
-Rappel crucial : Votre unique source d'information est le texte des articles fournis pour la question actuelle. Ne complétez, n'extrapolez ou n'analysez pas au-delà de ce que ces textes contiennent.
+Conclusion (Optionnel et basé sur le contexte) : Si le contexte s'y prête, vous pouvez conclure en suggérant des questions ou des pistes d'exploration pertinentes.
+Rappel : Votre source principale d'information est le texte des articles fournis. Évitez d'introduire des faits externes non justifiés par le contexte.
 
 Context:
 {{context_section}}
@@ -318,7 +315,8 @@ Answer:
         # Generate response
         try:
             answer = await provider.generate(final_prompt, model_id, options)
-            return answer, used_article_ids
+            # Return answer, used IDs, and the calculated token count
+            return answer, used_article_ids, final_prompt_token_count 
         except Exception as e:
             logger.error(f"Error generating response with {model_id}: {e}")
             raise

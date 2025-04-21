@@ -4,6 +4,7 @@ interface ChatMessage {
 	content: string;
 	isError?: boolean;
 	query_time?: number;
+	prompt_token_count?: number;
 }
 
 interface Source {
@@ -174,8 +175,18 @@ export function saveConversationAsHtml(messages: ChatMessage[], lastSources: Sou
 			htmlContent += `<p><i>No content.</i></p>`;
 		}
 		
-		if (message.role === 'assistant' && message.query_time !== undefined) {
-			htmlContent += `<p class="meta">Query Time: ${message.query_time.toFixed(2)}s</p>`;
+		if (message.role === 'assistant' && (message.query_time !== undefined || message.prompt_token_count !== undefined)) {
+			htmlContent += `<p class="meta">`;
+			if (message.query_time !== undefined) {
+				htmlContent += `Query Time: ${message.query_time.toFixed(2)}s`;
+			}
+			if (message.query_time !== undefined && message.prompt_token_count !== undefined) {
+				htmlContent += ` | `;
+			}
+			if (message.prompt_token_count !== undefined) {
+				htmlContent += `Prompt Tokens: ${message.prompt_token_count}`;
+			}
+			htmlContent += `</p>`;
 		}
 		if (message.isError && message.role !== 'assistant') { // Avoid duplicating error message if already shown
 			htmlContent += `<p class="meta error">Error occurred</p>`;

@@ -11,6 +11,7 @@
     content: string;
     isError?: boolean;
     query_time?: number;
+    prompt_token_count?: number;
   }
 
   interface Source {
@@ -116,11 +117,12 @@
         const result = await response.json();
         console.log("Query response received:", result);
         
-        // Add assistant message
+        // Add assistant message with token count
         messages = [...messages, {
           role: 'assistant',
           content: result.answer,
-          query_time: result.query_time
+          query_time: result.query_time,
+          prompt_token_count: result.prompt_token_count
         }];
         
         // Update sources
