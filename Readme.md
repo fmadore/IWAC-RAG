@@ -129,7 +129,7 @@ Key environment variables (set in `.env`):
 ## 1. Environment Setup
 
 ### 1.1 Prerequisites
-- [ ] Server environment (Linux or Windows) with Docker and Docker Compose installed and compatible with the host OS.
+- [ ] Docker and Docker Compose installed on your computer (Linux, Windows, or macOS).
 - [ ] Adequate storage for vector embeddings (~2-5GB depending on embedding model)
 - [ ] Sufficient RAM for running local Ollama models if used (minimum 8GB, recommended 16GB+)
 - [ ] API keys for external LLM providers (e.g., Gemini, Claude, OpenAI) stored securely if used.
@@ -287,24 +287,11 @@ Chatbot/
 - It manages their build process, dependencies, volumes (for persistent data), environment variables, and networking.
 - Refer to the `Chatbot/docker-compose.yml` file in the repository for the complete configuration details.
 
-### 5.3 Nginx Configuration for Production
-- [ ] Set up Nginx as reverse proxy:
-  - [ ] SSL termination
-  - [ ] Request routing
-  - [ ] Caching
-  - [ ] Security headers
-
-### 5.4 CI/CD Pipeline (Optional)
-- [ ] Set up GitHub Actions or similar for:
-  - [ ] Automated testing
-  - [ ] Building Docker images
-  - [ ] Deployment to server
-
 ## 6. Testing & Optimization
 
 ### 6.1 Functional Testing
 - [ ] Test RAG pipeline with various query types
-- [ ] Verify source citation accuracy
+- [x] Verify source citation accuracy
 - [ ] Validate filtering capabilities
 - [ ] Ensure multilingual support (if applicable based on input data)
 
@@ -312,7 +299,7 @@ Chatbot/
 - [ ] Tune ChromaDB for faster retrieval
 - [ ] Optimize Ollama model parameters (or external LLM usage)
 - [ ] Implement caching strategies (API level, frontend level?)
-- [ ] Monitor and optimize container resource usage
+- [x] Monitor and optimize container resource usage
 
 ### 6.3 User Experience Testing
 - [ ] Conduct usability testing
@@ -354,26 +341,28 @@ Chatbot/
 
 *(Code example for +page.svelte and components - see `Chatbot/frontend/src/...`)*
 
-## 8. Deployment Checklist
+## 8. Local Deployment Checklist
 
-- [ ] Ensure Docker and Docker Compose are installed on the target server (Linux or Windows)
-- [ ] Clone repository to server
+- [ ] Ensure Docker and Docker Compose are installed on your computer.
+- [ ] Clone the repository to your local machine.
 - [x] Prepare the input JSON file (e.g., `Chatbot/data/processed/input_articles.json`)
-- [ ] Configure environment variables in `.env`, including `LLM_PROVIDER` and `EXTERNAL_API_KEY` if using external APIs. Also ensure `VITE_API_URL` is set appropriately for the frontend build context if needed.
+- [ ] Configure environment variables in `.env`, including `LLM_PROVIDER` and `EXTERNAL_API_KEY` if using external APIs.
 - [ ] Build Docker images (`docker-compose build`)
 - [x] Run the indexing script (Example: `docker-compose run --rm backend python app/scripts/index_to_chroma.py --input data/processed/input_articles.json --chroma-host chromadb`)
 - [ ] Start services with Docker Compose (`docker-compose up -d`)
-- [ ] Configure Nginx as reverse proxy (if needed for production)
-- [ ] Set up SSL with Let's Encrypt (if needed for production)
-- [ ] Implement monitoring solution (e.g., Prometheus + Grafana)
-- [ ] Securely manage API keys (consider Docker secrets or other vault solutions for production)
-- [ ] Document API endpoints and usage
+- [ ] Access the application at `http://localhost:3000` (or your configured port).
 
-## 9. Resources and References
+## 9. Limitations and Future Work
+
+- **Conversational Context:** The current implementation treats each query independently. It does not maintain conversational history, making it ineffective at handling follow-up questions that rely on previous turns. Exploring strategies to include conversation history in the RAG process is a key area for future development.
+- **Metadata Filtering:** Filtering by list-based metadata fields like `locations` and `subjects` during the initial ChromaDB retrieval is currently limited due to how this data is stored. This might affect the relevance of initial results when these filters are applied.
+- **Chunking Strategy:** The basic sentence chunking might split related information across different chunks. More sophisticated chunking methods could improve retrieval relevance.
+- **Error Handling:** While basic error handling exists, it could be made more robust and provide clearer feedback to the user.
+- **UI/UX:** Further enhancements to the user interface, such as streaming responses, better source highlighting, and mobile responsiveness, could improve usability.
+
+## 10. Resources and References
 
 - [Ollama Documentation](https://github.com/ollama/ollama)
 - [ChromaDB Documentation](https://docs.trychroma.com/)
 - [Svelte Documentation](https://svelte.dev/docs)
 - [Docker Documentation](https://docs.docker.com/)
-- [Nginx as a Reverse Proxy](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/)
-- [Let's Encrypt](https://letsencrypt.org/docs/)
