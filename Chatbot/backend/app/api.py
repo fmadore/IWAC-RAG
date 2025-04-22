@@ -1,3 +1,17 @@
+import logging
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# === Moved Logging Configuration START ===
+# Basic logging configuration - Place this EARLY
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+# === Moved Logging Configuration END ===
+
+# Load environment variables from the project root .env file - Place this AFTER logging setup
+load_dotenv(Path(__file__).parents[2] / '.env')
+
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -6,24 +20,18 @@ import chromadb
 from chromadb.utils import embedding_functions
 import requests
 import json
-import os
-from datetime import datetime
-import logging
-import uvicorn
 import re # Import regex module
 
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Load environment variables from the project root .env file
-load_dotenv(Path(__file__).parents[2] / '.env')
-
-# Import our new ModelManager
+# Import our new ModelManager - Keep this AFTER logging setup
 from app.models import model_manager
 
+# No longer needed here:
 # Basic logging configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# logger = logging.getLogger(__name__)
+
+# Added import for datetime which was potentially removed above? Ensure it's present.
+from datetime import datetime
 
 app = FastAPI(title="IWAC RAG API", description="API for the Islam West Africa Collection RAG system")
 

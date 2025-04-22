@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
+import google.generativeai as genai
 
 try:
     import tiktoken
@@ -187,60 +188,79 @@ class ModelManager:
             logger.error(f"Provider not specified in config for model {model_id}")
             raise Exception(f"Provider not specified for model {model_id}")
         
-        # Check if provider has valid API key (if needed)
+        # Get provider instance
         provider = self.get_provider(provider_name)
         if not provider:
             logger.error(f"Provider {provider_name} not found")
             raise Exception(f"Provider not found: {provider_name}")
-        if not provider.validate_api_key():
+        if not provider.validate_api_key(): # Validate API key early
             logger.error(f"API key validation failed for provider {provider_name}")
             raise Exception(f"API key not configured for provider {provider_name}")
+
+        # Initialize token counting specific variables
+        encoding = None
+        gemini_model_instance = None
+        # Get Gemini model instance early for token counting if applicable
+        if provider_name == "gemini":
+            try:
+                full_model_id = f"models/{model_id}" if not model_id.startswith("models/") else model_id
+                gemini_model_instance = genai.GenerativeModel(full_model_id)
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini model {model_id} for token counting: {e}")
+                raise Exception(f"Failed to initialize Gemini model {model_id} for token counting: {e}")
+        elif tiktoken: # Use tiktoken for others if available (adjust per-provider later if needed)
+            try:
+                encoding = tiktoken.encoding_for_model(model_id)
+            except KeyError:
+                logger.warning(f"No specific tiktoken encoding for {model_id}. Using cl100k_base.")
+                encoding = tiktoken.get_encoding("cl100k_base")
+        else:
+            logger.warning("tiktoken not available. Using approximate word count.")
+            # Basic fallback
+            encoding = type('obj', (object,), {'encode': lambda text: text.split()})()
+
+        # Define token counting function based on provider
+        async def count_tokens_func(text_to_count: str) -> int:
+            if gemini_model_instance:
+                try:
+                    # Use Gemini's count_tokens method
+                    token_count_result = await gemini_model_instance.count_tokens(text_to_count)
+                    return token_count_result.total_tokens
+                except Exception as e:
+                    logger.error(f"Gemini count_tokens failed: {e}. Falling back to approx.")
+                    return len(text_to_count.split()) # Fallback
+            elif encoding:
+                # Use tiktoken or fallback encode
+                return len(encoding.encode(text_to_count))
+            else:
+                 return len(text_to_count.split()) # Absolute fallback
+
+        # --- Context Building & Token Calculation --- 
         
         # Extract base options from config
         options = {
             "temperature": model_config.get("temperature", 0.3)
         }
-        
-        # Add model-specific options from config
         if model_config_options := model_config.get("options"):
             options.update(model_config_options)
-        
-        # --- NEW CONTEXT BUILDING LOGIC --- 
 
-        # 1. Determine Tokenizer
-        encoding = None
-        if tiktoken:
-            try:
-                encoding = tiktoken.encoding_for_model(model_id)
-            except KeyError:
-                logger.warning(f"No specific tiktoken encoding found for {model_id}. Using cl100k_base.")
-                encoding = tiktoken.get_encoding("cl100k_base")
-        else:
-            # Very basic fallback if tiktoken is missing
-            def fallback_len(text: str) -> int:
-                return len(text.split()) # Approximate with word count
-            encoding = type('obj', (object,), {'encode': lambda text: text.split(), 'decode': lambda tokens: " ".join(tokens)})()
-            logger.warning("Using approximate word count for tokenization.")
-
-        # 2. Define Max Tokens and Prompt Structure
-        max_model_tokens = model_config.get("context_window", 4096) # Default to smaller window if not specified
-        # Estimate buffer for output tokens (adjust as needed)
+        # Define Max Tokens (remains the same logic)
+        max_model_tokens = model_config.get("context_window", 4096)
         output_buffer = options.get("maxOutputTokens", options.get("max_tokens", 1024)) 
         max_prompt_tokens = max_model_tokens - output_buffer
 
-        # Calculate tokens for the base prompt (excluding the context part)
         # Use the new prompt provided by the user (v4 - Max Output Tokens)
         base_prompt_template = ("""
 Vous êtes IWAC Chat Explorer, un assistant IA pour la Collection Islam Afrique de l'Ouest (IWAC). Votre rôle est d'agir comme un expert analysant les documents (articles de presse) qui vous sont fournis comme contexte pour chaque question.
 
 Instructions fondamentales :
 
-Respect du contexte et Synthèse : Votre réponse doit être principalement basée sur les informations contenues dans les articles fournis en contexte. Synthétisez les informations pertinentes trouvées dans le contexte pour construire une réponse cohérente, même si la réponse directe n'est pas explicitement formulée en un seul endroit. N'utilisez aucune connaissance externe non présente dans le contexte. Si une information clé demandée est totalement absente du contexte, mentionnez-le.
+Respect du contexte et Synthèse : Votre réponse doit être **principalement et exclusivement** basée sur les informations contenues dans les articles fournis en contexte. **Synthétisez en profondeur** les informations pertinentes trouvées dans le contexte pour construire une réponse **détaillée et cohérente**, même si la réponse directe n'est pas explicitement formulée en un seul endroit. **Ne vous contentez pas de résumer brièvement; expliquez et reliez les informations.** N'utilisez aucune connaissance externe non présente dans le contexte. Si une information clé demandée est totalement absente du contexte, mentionnez-le.
 Langue : Répondez dans la même langue que la question de l'utilisateur.
 Structure : Utilisez des paragraphes distincts pour organiser les différentes idées ou points abordés. Rédigez votre réponse sous forme de texte suivi ; évitez l'utilisation de listes à puces (bullet points) ou de numérotations.
 Repères temporels : Lorsque le contexte fournit des dates ou des périodes, incluez ces repères temporels pour situer les événements.
-Profondeur et Analyse : Dans la mesure du possible et en vous basant sur les éléments du contexte, proposez une analyse, mettez en évidence le contexte historique, les tendances ou les perspectives mentionnées ou suggérées par les articles. Incluez des exemples spécifiques, des études de cas ou des éléments de comparaison si le contexte les fournit. Discutez des différentes perspectives ou interprétations si elles sont présentes ou peuvent être raisonnablement inférées du contexte. Ne spéculez pas largement au-delà des informations fournies.
-Exhaustivité basée sur le contexte : Fournissez la réponse la plus complète possible en vous limitant aux informations présentes ou raisonnablement inférables du contexte fourni. Efforcez-vous d'être aussi détaillé que possible, en utilisant la capacité de tokens de sortie qui vous est allouée, tout en respectant strictement le contexte.
+Profondeur et Analyse : Dans la mesure du possible et en vous basant **strictement** sur les éléments du contexte, proposez une analyse, mettez en évidence le contexte historique, les tendances ou les perspectives mentionnées ou suggérées par les articles. Incluez des exemples spécifiques, des études de cas ou des éléments de comparaison si le contexte les fournit. Discutez des différentes perspectives ou interprétations si elles sont présentes ou peuvent être raisonnablement inférées du contexte. Ne spéculez pas largement au-delà des informations fournies.
+Exhaustivité et Longueur ciblée : Fournissez la réponse la plus complète et **élaborée** possible en vous limitant aux informations présentes ou raisonnablement inférables du contexte fourni. **Efforcez-vous d'être aussi détaillé que possible et d'utiliser une part significative de la capacité de tokens de sortie qui vous est allouée (maxOutputTokens/max_tokens) pour construire une réponse riche et informative**, tout en respectant strictement le contexte et sans ajouter d'informations superflues ou non pertinentes.
 Pas de citation explicite : Ne citez pas ou ne référencez pas directement les articles sources dans votre réponse (le système gère cela séparément).
 Conclusion (Optionnel et basé sur le contexte) : Si le contexte s'y prête, vous pouvez conclure en suggérant des questions ou des pistes d'exploration pertinentes.
 Rappel : Votre source principale d'information est le texte des articles fournis. Évitez d'introduire des faits externes non justifiés par le contexte.
@@ -252,10 +272,11 @@ User question: {user_query}
 
 Answer:
 """)
-        # Calculate token count using placeholders for dynamic parts
-        base_prompt_tokens = len(encoding.encode(base_prompt_template.format(context_section="placeholder", user_query="placeholder"))) 
+        # Calculate base prompt tokens using the appropriate method
+        base_prompt_for_calc = base_prompt_template.format(context_section="placeholder", user_query="placeholder")
+        base_prompt_tokens = await count_tokens_func(base_prompt_for_calc)
 
-        # 3. Identify Relevant Articles from Metadata
+        # Identify Relevant Articles (remains the same logic)
         ranked_article_ids = []
         seen_article_ids = set()
         if not self.full_articles:
@@ -268,11 +289,10 @@ Answer:
                     seen_article_ids.add(article_id)
         logger.info(f"Identified {len(ranked_article_ids)} unique relevant articles from {len(retrieved_metadata)} chunks.")
 
-        # 4. Add Full Article Content Iteratively
+        # Add Full Article Content Iteratively using accurate token counts
         included_articles_content = []
         used_article_ids = []
         current_context_tokens = 0
-        final_context_str = ""
         separator = "\n\n--- ARTICLE START ---\n\n"
         num_articles_included = 0
 
@@ -282,43 +302,44 @@ Answer:
                 logger.warning(f"Skipping article {article_id}: No content found.")
                 continue
 
-            article_content = article_data["content"] # Get the full content
+            article_content = article_data["content"] 
             article_title = article_data.get("title", "Untitled")
             article_meta_header = f"Title: {article_title}\n---\n"
-            full_text_to_add = (separator + article_meta_header + article_content)
-            
-            if not included_articles_content:
-                 full_text_to_add = article_meta_header + article_content
+            # Construct text to add *for token calculation*
+            text_to_add_for_calc = (separator + article_meta_header + article_content) if included_articles_content else (article_meta_header + article_content)
 
-            article_tokens = len(encoding.encode(full_text_to_add))
+            # Calculate article tokens using the appropriate method
+            article_tokens = await count_tokens_func(text_to_add_for_calc)
 
             if base_prompt_tokens + current_context_tokens + article_tokens <= max_prompt_tokens:
-                included_articles_content.append(full_text_to_add)
-                current_context_tokens += article_tokens
+                # If it fits, add the actual content (with separator if needed)
+                actual_text_to_append = (separator + article_meta_header + article_content) if included_articles_content else (article_meta_header + article_content)
+                included_articles_content.append(actual_text_to_append)
+                current_context_tokens += article_tokens # Add the calculated tokens
                 num_articles_included += 1
                 used_article_ids.append(article_id)
             else:
-                logger.warning(f"Context truncated for model {model_id}. Stopped after {num_articles_included}/{len(ranked_article_ids)} articles due to token limit ({max_prompt_tokens} prompt tokens max). Last article ({article_id}) considered was too large ({article_tokens} tokens).)")
+                logger.warning(f"Context truncated for model {model_id}. Stopped after {num_articles_included}/{len(ranked_article_ids)} articles due to token limit ({max_prompt_tokens} prompt tokens max). Last article ({article_id}) considered required {article_tokens} tokens.)")
                 break
 
         final_context_str = "".join(included_articles_content)
-        # Use the same base prompt template for the final prompt
         final_prompt = base_prompt_template.format(
             context_section=final_context_str if final_context_str else "No context available.",
             user_query=user_query
         )
-        final_prompt_token_count = len(encoding.encode(final_prompt))
+        
+        # Calculate final prompt tokens accurately
+        final_prompt_token_count = await count_tokens_func(final_prompt)
+        logger.info(f"Constructed final prompt with {num_articles_included} full articles (IDs: {used_article_ids}), calculated {final_prompt_token_count} tokens (limit: {max_prompt_tokens}).")
 
-        logger.info(f"Constructed final prompt with {num_articles_included} full articles (IDs: {used_article_ids}), {final_prompt_token_count} tokens (limit: {max_prompt_tokens}).")
-
-        # --- End NEW CONTEXT BUILDING --- 
-
-        # Generate response
+        # --- Generate response using the chosen provider --- 
         try:
+            # The provider.generate method only needs the final prompt, model_id, and options
             answer = await provider.generate(final_prompt, model_id, options)
-            # Calculate answer token count
-            answer_token_count = len(encoding.encode(answer))
-            logger.info(f"Answer token count: {answer_token_count}")
+            
+            # Calculate answer token count accurately
+            answer_token_count = await count_tokens_func(answer)
+            logger.info(f"Calculated answer token count: {answer_token_count}")
 
             # Return answer, used IDs, and both token counts
             return answer, used_article_ids, final_prompt_token_count, answer_token_count 
