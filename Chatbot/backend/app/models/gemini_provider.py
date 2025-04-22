@@ -2,60 +2,59 @@ import os
 import logging
 from typing import Dict, Any
 from .base import LLMProvider
-import google.generativeai as genai
-from google.generativeai import types # Keep explicit types import
+# Updated imports for the new SDK
+from google import genai
+from google.genai import types 
+from google.genai import errors
 
 logger = logging.getLogger(__name__)
 
 class GeminiProvider(LLMProvider):
     """
-    Implementation of LLMProvider for Google's Gemini API using the google-generativeai SDK.
+    Implementation of LLMProvider for Google's Gemini API using the google-genai SDK.
     """
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
-        self.configured = False # Flag to track successful configuration
+        self.client = None # Initialize client to None
         if self.api_key:
             try:
-                # Configure the library with the API key
-                genai.configure(api_key=self.api_key)
-                # Perform a simple test, like listing models, to validate the key (optional but recommended)
-                # Note: This makes __init__ potentially blocking if not handled carefully
-                # For simplicity here, we assume configuration is enough for basic validation
-                # Or we could perform a quick list_models check
-                # Example check (can be blocking):
-                # models_list = [m for m in genai.list_models()] # Basic check
+                # Initialize the client directly using the new SDK style
+                self.client = genai.Client(api_key=self.api_key)
+                # Simple check: Try listing models to validate connection/key
+                # Note: This might be slow or incur a small cost, alternative is just relying on the first generate call to fail
+                # For simplicity, let's assume client initialization is enough, 
+                # or rely on the first generate call failing if key is bad.
+                # models_list = list(self.client.models.list()) # Example check
                 # if not models_list:
-                #    raise Exception("API key might be invalid or no models accessible.")
-                self.configured = True
-                logger.info("GeminiProvider configured successfully with google-generativeai.")
+                #    raise Exception("Failed to list models. API key might be invalid or no models accessible.")
+                logger.info("GeminiProvider initialized successfully with google-genai Client.")
             except Exception as e:
-                logger.error(f"Failed to configure Gemini Client/SDK: {e}")
-                self.api_key = None # Mark as unconfigured if setup fails
+                logger.error(f"Failed to initialize Gemini Client (google-genai): {e}")
+                self.client = None # Ensure client is None if init fails
         else:
             logger.warning("GEMINI_API_KEY not found in environment.")
-            self.api_key = None # Ensure api_key is None if not found
+            # self.api_key is already None if not found
 
     async def generate(self, prompt: str, model_id: str, options: Dict[str, Any]) -> str:
         """
-        Generate text using the google-generativeai SDK.
+        Generate text using the google-genai SDK.
         """
-        # Check if the library was configured successfully during init
         if not self.validate_api_key():
-            raise Exception("Gemini SDK not configured. Check API key and initial setup.")
+            raise Exception("Gemini Client not initialized. Check API key and initial setup.")
 
-        logger.info(f"Generating response with Gemini model: {model_id} using google-generativeai SDK")
+        logger.info(f"Generating response with Gemini model: {model_id} using google-genai SDK")
 
         try:
-            # Create the GenerativeModel instance
-            # Model ID might need the 'models/' prefix, let's ensure it
-            full_model_id = f"models/{model_id}" if not model_id.startswith("models/") else model_id
-            model = genai.GenerativeModel(full_model_id)
-
-            # Prepare generation config using types.GenerationConfig
+            # Model ID for the new SDK usually doesn't need the 'models/' prefix for generate_content
+            # However, the client handles variations, so let's keep it simple.
+            # If issues arise, we might need model = client.models.get(f'models/{model_id}') first.
+            
+            # Prepare generation config using types.GenerateContentConfig
             gen_config_dict = {
                 "temperature": options.get("temperature", 0.3),
             }
-            max_tokens = options.get("maxOutputTokens")
+            # The new SDK uses 'max_output_tokens' directly within GenerateContentConfig
+            max_tokens = options.get("maxOutputTokens") 
             if max_tokens is not None:
                 gen_config_dict["max_output_tokens"] = int(max_tokens)
 
@@ -67,10 +66,8 @@ class GeminiProvider(LLMProvider):
             if stop_sequences and isinstance(stop_sequences, list):
                 gen_config_dict["stop_sequences"] = stop_sequences
 
-            generation_config = types.GenerationConfig(**gen_config_dict)
-
             # Prepare thinking config if budget is specified
-            thinking_config = None
+            thinking_config = None # Initialize thinking_config to None
             thinking_budget = options.get("thinkingBudget")
             if thinking_budget is not None:
                 try:
@@ -81,50 +78,54 @@ class GeminiProvider(LLMProvider):
                 except ValueError:
                     logger.warning(f"Invalid thinkingBudget value: {thinking_budget}. Ignoring.")
                 except AttributeError:
-                    logger.warning("ThinkingConfig not available in the current google.generativeai version. Skipping.")
-                    thinking_config = None # Explicitly ensure it's None
+                    logger.warning("ThinkingConfig attribute not found unexpectedly. Skipping.")
 
-            # Prepare arguments for the API call
-            api_kwargs = {
-                "contents": prompt, # Pass the combined prompt string directly
-                "generation_config": generation_config
-                # Add safety_settings here if needed later
-            }
-            # Only add thinking_config if it was successfully created
+            # Create the config object, including thinking_config if specified
             if thinking_config is not None:
-                api_kwargs["thinking_config"] = thinking_config
+                gen_config_dict["thinking_config"] = thinking_config
+            generation_config = types.GenerateContentConfig(**gen_config_dict)
 
-            # Generate content asynchronously using the model instance
-            response = await model.generate_content_async(**api_kwargs)
+            # Ensure model ID has 'models/' prefix
+            full_model_id = f'models/{model_id}' if not model_id.startswith("models/") else model_id
 
-            # Extract the text response
-            if response.candidates and response.candidates[0].content.parts:
-                if response.candidates[0].content.parts:
-                    answer = response.candidates[0].content.parts[0].text.strip()
-                    logger.info("Gemini response received successfully via SDK.")
-                    return answer
-                else:
-                     logger.error(f"Gemini response candidate missing parts. Response: {response}")
-                     raise Exception("Gemini response candidate missing parts.")
-            elif hasattr(response, 'prompt_feedback') and getattr(response.prompt_feedback, 'block_reason', None):
+            # Generate content using async client
+            response = await self.client.aio.models.generate_content(
+                model=full_model_id,
+                contents=prompt,
+                config=generation_config
+            )
+            
+            # --- Extract the text response using the new simpler way --- 
+            # Need to handle potential blocking reasons first
+            if response.prompt_feedback and response.prompt_feedback.block_reason:
                 block_reason = response.prompt_feedback.block_reason
                 block_details = ""
                 if hasattr(response.prompt_feedback, 'safety_ratings'):
                     block_details = f" Safety Ratings: {response.prompt_feedback.safety_ratings}"
                 logger.error(f"Gemini request blocked. Reason: {block_reason}.{block_details}")
                 raise Exception(f"Content blocked by Gemini API due to: {block_reason}.{block_details}")
-            else:
-                logger.error(f"Gemini response missing expected content or blocked. Response: {response}")
-                finish_reason = getattr(response.candidates[0], 'finish_reason', 'UNKNOWN') if response.candidates else 'NO_CANDIDATES'
-                raise Exception(f"Failed to get valid response content from Gemini API. Finish Reason: {finish_reason}. Response: {response}")
+            
+            # Check if response has text (might not if blocked or other issues)
+            # The new SDK might raise an exception directly for some errors
+            try:
+                answer = response.text.strip()
+                logger.info("Gemini response received successfully via google-genai SDK.")
+                return answer
+            except ValueError as e:
+                # Handle cases where response.text access fails (e.g., blocked content with no text part)
+                logger.error(f"Could not extract text from Gemini response. Finish Reason: {response.candidates[0].finish_reason if response.candidates else 'N/A'}. Error: {e}. Response: {response}")
+                raise Exception(f"Failed to get valid response content from Gemini API. Check logs for details.")
 
+        except errors.APIError as e: # Catch specific API errors from the new SDK (Use APIError)
+            logger.exception(f"Gemini API Error (google-genai): {e}")
+            raise Exception(f"Error interacting with Gemini service (google-genai): {e}")
         except Exception as e:
-            logger.exception(f"Error during Gemini SDK call: {e}")
-            raise Exception(f"Error interacting with Gemini service via SDK: {e}")
+            logger.exception(f"Unexpected error during Gemini SDK (google-genai) call: {e}")
+            raise Exception(f"Unexpected error interacting with Gemini service (google-genai): {e}")
 
     def validate_api_key(self) -> bool:
         """
-        Check if the Gemini API key is configured and SDK was initialized.
+        Check if the Gemini API key is configured and the client was initialized.
         """
-        # Check the configured flag set during __init__
-        return self.configured and self.api_key is not None and len(self.api_key) > 0
+        # Check if the client object was successfully created in __init__
+        return self.client is not None and self.api_key is not None and len(self.api_key) > 0

@@ -3,7 +3,6 @@ import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
-import google.generativeai as genai
 
 try:
     import tiktoken
@@ -199,42 +198,55 @@ class ModelManager:
 
         # Initialize token counting specific variables
         encoding = None
-        gemini_model_instance = None
-        # Get Gemini model instance early for token counting if applicable
-        if provider_name == "gemini":
-            try:
-                full_model_id = f"models/{model_id}" if not model_id.startswith("models/") else model_id
-                gemini_model_instance = genai.GenerativeModel(full_model_id)
-            except Exception as e:
-                logger.error(f"Failed to initialize Gemini model {model_id} for token counting: {e}")
-                raise Exception(f"Failed to initialize Gemini model {model_id} for token counting: {e}")
-        elif tiktoken: # Use tiktoken for others if available (adjust per-provider later if needed)
+        # --- Removed Gemini-specific model instance initialization --- 
+        # gemini_model_instance = None
+        # if provider_name == "gemini":
+        #     try:
+        #         full_model_id = f"models/{model_id}" if not model_id.startswith("models/") else model_id
+        #         gemini_model_instance = genai.GenerativeModel(full_model_id)
+        #     except Exception as e:
+        #         logger.error(f"Failed to initialize Gemini model {model_id} for token counting: {e}")
+        #         raise Exception(f"Failed to initialize Gemini model {model_id} for token counting: {e}")
+        
+        # Setup tiktoken encoding if not using Gemini (or as fallback)
+        if provider_name != "gemini" and tiktoken:
             try:
                 encoding = tiktoken.encoding_for_model(model_id)
             except KeyError:
                 logger.warning(f"No specific tiktoken encoding for {model_id}. Using cl100k_base.")
                 encoding = tiktoken.get_encoding("cl100k_base")
-        else:
-            logger.warning("tiktoken not available. Using approximate word count.")
-            # Basic fallback
+        elif provider_name != "gemini":
+            logger.warning("tiktoken not available. Using approximate word count for non-Gemini models.")
+            # Basic fallback for non-gemini
             encoding = type('obj', (object,), {'encode': lambda text: text.split()})()
 
         # Define token counting function based on provider
-        # NOTE: This function is now synchronous because Gemini's count_tokens is sync
+        # NOTE: This function is now synchronous
         def count_tokens_func(text_to_count: str) -> int:
-            if gemini_model_instance:
+            # --- Use the new SDK client for Gemini token counting --- 
+            if provider_name == "gemini":
                 try:
-                    # Use Gemini's count_tokens method (synchronous)
-                    token_count_result = gemini_model_instance.count_tokens(text_to_count)
-                    return token_count_result.total_tokens
+                    # Get the initialized client from the provider instance
+                    gemini_provider = self.get_provider("gemini")
+                    if gemini_provider and gemini_provider.client:
+                        # Construct model name, ensure models/ prefix
+                        full_model_id_for_count = f"models/{model_id}" if not model_id.startswith("models/") else model_id
+                        # Call the client's count_tokens method (assuming it exists and is sync)
+                        count_response = gemini_provider.client.models.count_tokens(
+                            model=full_model_id_for_count,
+                            contents=text_to_count
+                        )
+                        return count_response.total_tokens
+                    else:
+                        logger.error("Gemini provider or client not initialized for token counting. Falling back.")
+                        return len(text_to_count.split()) # Fallback
                 except Exception as e:
-                    logger.error(f"Gemini count_tokens failed: {e}. Falling back to approx.")
+                    logger.error(f"Gemini count_tokens (google-genai SDK) failed: {e}. Falling back to approx.")
                     return len(text_to_count.split()) # Fallback
-            elif encoding:
-                # Use tiktoken or fallback encode
+            elif encoding: # Use tiktoken for other providers if available
                 return len(encoding.encode(text_to_count))
-            else:
-                 return len(text_to_count.split()) # Absolute fallback
+            else: # Absolute fallback (word count)
+                 return len(text_to_count.split())
 
         # --- Context Building & Token Calculation --- 
         

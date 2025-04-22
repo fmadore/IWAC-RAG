@@ -25,7 +25,6 @@ google-auth
 google-auth-httplib2
 google-auth-oauthlib
 google-genai
-google-generativeai
 googleapis-common-protos==1.70.0
 grpcio==1.71.0
 h11==0.14.0
