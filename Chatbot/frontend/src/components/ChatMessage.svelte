@@ -16,11 +16,24 @@
     class="message-bubble {message.role} {message.isError ? 'error' : ''}"
   >
     <p class="message-content">{message.content}</p>
-    {#if message.role === 'assistant' && message.query_time}
-      <p class="meta-text query-time">Time: {message.query_time.toFixed(2)}s</p>
-    {/if}
-    {#if message.role === 'assistant' && message.prompt_token_count}
-      <p class="meta-text token-count">Tokens: {message.prompt_token_count}</p>
+    {#if message.role === 'assistant' && (message.query_time !== undefined || message.prompt_token_count !== undefined || message.answer_token_count !== undefined)}
+      <p class="meta-text query-time">
+        {#if message.query_time !== undefined}
+          Time: {message.query_time.toFixed(2)}s
+        {/if}
+        {#if (message.prompt_token_count !== undefined || message.answer_token_count !== undefined) && message.query_time !== undefined}
+          <span class="separator"> | </span>
+        {/if}
+        {#if message.prompt_token_count !== undefined}
+          Prompt: {message.prompt_token_count} tokens
+        {/if}
+        {#if message.prompt_token_count !== undefined && message.answer_token_count !== undefined}
+          <span class="separator"> | </span>
+        {/if}
+        {#if message.answer_token_count !== undefined}
+          Answer: {message.answer_token_count} tokens
+        {/if}
+      </p>
     {/if}
     {#if message.isError}
       <p class="meta-text error-text">Error occurred</p>
@@ -123,9 +136,8 @@
     color: #a0aec0; /* text-gray-400 */
   }
 
-  .token-count {
-    text-align: right;
-    color: #a0aec0; /* text-gray-400 */
+  .separator {
+    margin: 0 0.25em;
   }
 
   .error-text {

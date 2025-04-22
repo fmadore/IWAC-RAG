@@ -79,6 +79,18 @@
       "options": {
         "maxOutputTokens": 64000
       }
+    },
+    {
+      "id": "gemini-2.5-flash-preview-04-17",
+      "name": "Gemini: 2.5 Flash Preview (Thinking)",
+      "provider": "gemini",
+      "context_window": 1000000,
+      "temperature": 0.7,
+      "options": {
+        "maxOutputTokens": 8192,
+        "thinkingBudget": 16384
+      }
     }
-  ]
+  ],
+  "default_model": "gemini-2.5-flash-preview-04-17"
 }

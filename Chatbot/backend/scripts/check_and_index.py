@@ -4,6 +4,7 @@ import subprocess
 import time
 import chromadb
 from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 
 print("--- Running Check and Index Script ---")
 
@@ -14,6 +15,17 @@ collection_name = os.getenv("COLLECTION_NAME", "iwac_articles") # Ensure this ma
 input_json_path_default = "/app/data/processed/input_articles.json" 
 # Allow overriding input path via script argument if needed in the future
 input_json_path = sys.argv[1] if len(sys.argv) > 1 else input_json_path_default
+
+# Embedding function (ensure consistency with indexer)
+embedding_model_name = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
+print(f"Using embedding model: {embedding_model_name} for check/creation")
+try:
+    embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=embedding_model_name
+    )
+except Exception as e:
+    print(f"ERROR: Failed to initialize embedding function: {e}", file=sys.stderr)
+    sys.exit(1) # Exit if we can't even load the embedder
 
 print(f"ChromaDB Host: {chroma_host}")
 print(f"ChromaDB Port: {chroma_port}")
@@ -49,7 +61,11 @@ for i in range(max_retries):
 needs_indexing = False
 try:
     # Use get_or_create_collection to ensure the collection exists
-    collection = client.get_or_create_collection(name=collection_name)
+    # Pass the embedding function to ensure consistency!
+    collection = client.get_or_create_collection(
+        name=collection_name, 
+        embedding_function=embedding_function
+    )
     print(f"Ensured collection '{collection_name}' exists.")
     
     # Now check the count

@@ -153,9 +153,9 @@ class ModelManager:
         """
         return self.providers.get(provider_name)
     
-    async def generate_response(self, user_query: str, retrieved_metadata: List[Dict[str, Any]], model_id: Optional[str] = None) -> Tuple[str, List[str], int]:
+    async def generate_response(self, user_query: str, retrieved_metadata: List[Dict[str, Any]], model_id: Optional[str] = None) -> Tuple[str, List[str], int, int]:
         """
-        Generate a response using the specified model and return the answer, used article IDs, and prompt token count.
+        Generate a response using the specified model and return the answer, used article IDs, prompt token count, and answer token count.
 
         Args:
             user_query: The user's original query.
@@ -167,6 +167,7 @@ class ModelManager:
                 - The generated response text (str)
                 - A list of article IDs actually used in the context (List[str])
                 - The total number of tokens in the final prompt sent to the LLM (int)
+                - The total number of tokens in the generated answer (int)
 
         Raises:
             Exception: If the model or provider is not found or generation fails
@@ -315,8 +316,12 @@ Answer:
         # Generate response
         try:
             answer = await provider.generate(final_prompt, model_id, options)
-            # Return answer, used IDs, and the calculated token count
-            return answer, used_article_ids, final_prompt_token_count 
+            # Calculate answer token count
+            answer_token_count = len(encoding.encode(answer))
+            logger.info(f"Answer token count: {answer_token_count}")
+
+            # Return answer, used IDs, and both token counts
+            return answer, used_article_ids, final_prompt_token_count, answer_token_count 
         except Exception as e:
             logger.error(f"Error generating response with {model_id}: {e}")
             raise

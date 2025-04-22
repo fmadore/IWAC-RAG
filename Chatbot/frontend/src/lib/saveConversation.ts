@@ -5,6 +5,7 @@ interface ChatMessage {
 	isError?: boolean;
 	query_time?: number;
 	prompt_token_count?: number;
+	answer_token_count?: number;
 }
 
 interface Source {
@@ -175,16 +176,22 @@ export function saveConversationAsHtml(messages: ChatMessage[], lastSources: Sou
 			htmlContent += `<p><i>No content.</i></p>`;
 		}
 		
-		if (message.role === 'assistant' && (message.query_time !== undefined || message.prompt_token_count !== undefined)) {
+		if (message.role === 'assistant' && (message.query_time !== undefined || message.prompt_token_count !== undefined || message.answer_token_count !== undefined)) {
 			htmlContent += `<p class="meta">`;
 			if (message.query_time !== undefined) {
 				htmlContent += `Query Time: ${message.query_time.toFixed(2)}s`;
 			}
-			if (message.query_time !== undefined && message.prompt_token_count !== undefined) {
+			if (message.query_time !== undefined && (message.prompt_token_count !== undefined || message.answer_token_count !== undefined)) {
 				htmlContent += ` | `;
 			}
 			if (message.prompt_token_count !== undefined) {
 				htmlContent += `Prompt Tokens: ${message.prompt_token_count}`;
+			}
+			if (message.prompt_token_count !== undefined && message.answer_token_count !== undefined) {
+				htmlContent += ` | `;
+			}
+			if (message.answer_token_count !== undefined) {
+				htmlContent += `Answer Tokens: ${message.answer_token_count}`;
 			}
 			htmlContent += `</p>`;
 		}

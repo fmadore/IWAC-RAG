@@ -69,13 +69,33 @@ class GeminiProvider(LLMProvider):
 
             generation_config = types.GenerationConfig(**gen_config_dict)
 
-            # Generate content asynchronously using the model instance
-            # The prompt from ModelManager includes context and query
-            response = await model.generate_content_async(
-                contents=prompt, # Pass the combined prompt string directly
-                generation_config=generation_config
+            # Prepare thinking config if budget is specified
+            thinking_config = None
+            thinking_budget = options.get("thinkingBudget")
+            if thinking_budget is not None:
+                try:
+                    thinking_config = types.ThinkingConfig(
+                        thinking_budget=int(thinking_budget)
+                    )
+                    logger.info(f"Using thinking budget: {thinking_budget}")
+                except ValueError:
+                    logger.warning(f"Invalid thinkingBudget value: {thinking_budget}. Ignoring.")
+                except AttributeError:
+                    logger.warning("ThinkingConfig not available in the current google.generativeai version. Skipping.")
+                    thinking_config = None # Explicitly ensure it's None
+
+            # Prepare arguments for the API call
+            api_kwargs = {
+                "contents": prompt, # Pass the combined prompt string directly
+                "generation_config": generation_config
                 # Add safety_settings here if needed later
-            )
+            }
+            # Only add thinking_config if it was successfully created
+            if thinking_config is not None:
+                api_kwargs["thinking_config"] = thinking_config
+
+            # Generate content asynchronously using the model instance
+            response = await model.generate_content_async(**api_kwargs)
 
             # Extract the text response
             if response.candidates and response.candidates[0].content.parts:

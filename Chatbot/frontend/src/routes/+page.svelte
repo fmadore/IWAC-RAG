@@ -12,6 +12,7 @@
     isError?: boolean;
     query_time?: number;
     prompt_token_count?: number;
+    answer_token_count?: number;
   }
 
   interface Source {
@@ -122,7 +123,8 @@
           role: 'assistant',
           content: result.answer,
           query_time: result.query_time,
-          prompt_token_count: result.prompt_token_count
+          prompt_token_count: result.prompt_token_count,
+          answer_token_count: result.answer_token_count
         }];
         
         // Update sources

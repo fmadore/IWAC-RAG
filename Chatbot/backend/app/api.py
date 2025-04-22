@@ -127,6 +127,7 @@ class QueryResponse(BaseModel):
     sources: List[Source]
     query_time: float
     prompt_token_count: Optional[int] = None # Add field for token count
+    answer_token_count: Optional[int] = None # Add field for answer token count
 
 class FilterInfo(BaseModel):
     min: Optional[str] = None
@@ -284,7 +285,8 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
                 answer="I could not find relevant information for your query.",
                 sources=[],
                 query_time=query_time,
-                prompt_token_count=None
+                prompt_token_count=None,
+                answer_token_count=None
             )
 
         # context_text = "\n\n---\n\n".join(contexts) # Removed - context built differently now
@@ -301,8 +303,8 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
             # Pass the raw query and RETRIEVED METADATA instead of chunk text
             
             logger.info(f"Calling ModelManager.generate_response with model '{request.model_name or model_manager.default_model_id}'...")
-            # Generate response using ModelManager - unpack token count
-            answer, used_article_ids, prompt_tokens = await model_manager.generate_response(
+            # Generate response using ModelManager - unpack token counts
+            answer, used_article_ids, prompt_tokens, answer_tokens = await model_manager.generate_response(
                 user_query=request.query,
                 retrieved_metadata=retrieved_metadata,
                 model_id=request.model_name
@@ -310,6 +312,7 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
             logger.info(f"LLM response generated successfully by ModelManager.")
             logger.info(f"Actual articles used for context: {used_article_ids}")
             logger.info(f"Prompt token count: {prompt_tokens}") # Log the token count
+            logger.info(f"Answer token count: {answer_tokens}") # Log the token count
 
             # Filter sources to include only those whose articles were actually used
             final_sources = []
@@ -340,7 +343,8 @@ async def query(request: QueryRequest, collection: chromadb.Collection = Depends
             answer=answer or "No answer generated.", # Fallback answer
             sources=final_sources,
             query_time=query_time,
-            prompt_token_count=prompt_tokens # Include token count in response
+            prompt_token_count=prompt_tokens, # Include token count in response
+            answer_token_count=answer_tokens # Include answer token count in response
         )
     
     except HTTPException as http_exc:
