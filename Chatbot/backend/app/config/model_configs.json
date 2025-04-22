@@ -87,7 +87,7 @@
       "context_window": 1000000,
       "temperature": 0.7,
       "options": {
-        "maxOutputTokens": 8192,
+        "maxOutputTokens": 64000,
         "thinkingBudget": 16384
       }
     }
