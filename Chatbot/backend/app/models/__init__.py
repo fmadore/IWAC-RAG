@@ -220,11 +220,12 @@ class ModelManager:
             encoding = type('obj', (object,), {'encode': lambda text: text.split()})()
 
         # Define token counting function based on provider
-        async def count_tokens_func(text_to_count: str) -> int:
+        # NOTE: This function is now synchronous because Gemini's count_tokens is sync
+        def count_tokens_func(text_to_count: str) -> int:
             if gemini_model_instance:
                 try:
-                    # Use Gemini's count_tokens method
-                    token_count_result = await gemini_model_instance.count_tokens(text_to_count)
+                    # Use Gemini's count_tokens method (synchronous)
+                    token_count_result = gemini_model_instance.count_tokens(text_to_count)
                     return token_count_result.total_tokens
                 except Exception as e:
                     logger.error(f"Gemini count_tokens failed: {e}. Falling back to approx.")
@@ -273,8 +274,9 @@ User question: {user_query}
 Answer:
 """)
         # Calculate base prompt tokens using the appropriate method
+        # Need to call the sync function directly
         base_prompt_for_calc = base_prompt_template.format(context_section="placeholder", user_query="placeholder")
-        base_prompt_tokens = await count_tokens_func(base_prompt_for_calc)
+        base_prompt_tokens = count_tokens_func(base_prompt_for_calc)
 
         # Identify Relevant Articles (remains the same logic)
         ranked_article_ids = []
@@ -308,8 +310,12 @@ Answer:
             # Construct text to add *for token calculation*
             text_to_add_for_calc = (separator + article_meta_header + article_content) if included_articles_content else (article_meta_header + article_content)
 
-            # Calculate article tokens using the appropriate method
-            article_tokens = await count_tokens_func(text_to_add_for_calc)
+            # Calculate article tokens using the appropriate method (sync call)
+            article_tokens = count_tokens_func(text_to_add_for_calc)
+
+            # --- DEBUG LOG START ---
+            logger.debug(f"Article {article_id}: Content length={len(article_content)}, Calculated tokens={article_tokens}, Cumulative tokens={current_context_tokens + article_tokens}")
+            # --- DEBUG LOG END ---
 
             if base_prompt_tokens + current_context_tokens + article_tokens <= max_prompt_tokens:
                 # If it fits, add the actual content (with separator if needed)
@@ -328,8 +334,11 @@ Answer:
             user_query=user_query
         )
         
-        # Calculate final prompt tokens accurately
-        final_prompt_token_count = await count_tokens_func(final_prompt)
+        # Calculate final prompt tokens accurately (sync call)
+        # !!! BUG FIX: Use the sum of tokens calculated during context building, 
+        #     don't recalculate on the potentially huge final_prompt string !!!
+        # final_prompt_token_count = count_tokens_func(final_prompt) # Old buggy way
+        final_prompt_token_count = base_prompt_tokens + current_context_tokens # Correct way
         logger.info(f"Constructed final prompt with {num_articles_included} full articles (IDs: {used_article_ids}), calculated {final_prompt_token_count} tokens (limit: {max_prompt_tokens}).")
 
         # --- Generate response using the chosen provider --- 
@@ -337,8 +346,8 @@ Answer:
             # The provider.generate method only needs the final prompt, model_id, and options
             answer = await provider.generate(final_prompt, model_id, options)
             
-            # Calculate answer token count accurately
-            answer_token_count = await count_tokens_func(answer)
+            # Calculate answer token count accurately (sync call)
+            answer_token_count = count_tokens_func(answer)
             logger.info(f"Calculated answer token count: {answer_token_count}")
 
             # Return answer, used IDs, and both token counts
