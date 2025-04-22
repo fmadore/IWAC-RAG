@@ -52,9 +52,20 @@ python -m nltk.downloader punkt
 
 ## Running the Indexer
 
-The indexer script prepares the ChromaDB database by processing articles into embeddable chunks. **This must be run before querying**, as it creates the data used for identifying relevant articles.
+The indexer script prepares the ChromaDB database by processing articles into embeddable chunks. This is crucial for the initial retrieval step.
 
-**Via Docker Compose (Recommended):**
+**Automatic Check/Indexing on Startup (Recommended):**
+When the backend service starts (e.g., via `docker-compose up`), the `entrypoint.sh` script automatically runs `scripts/check_and_index.py`. This script:
+1. Waits for ChromaDB to be available.
+2. Checks if the configured collection (`COLLECTION_NAME`) exists and contains data.
+3. If the collection is empty, it automatically runs the `scripts/index_to_chroma.py` script to populate the database using the data found at `/app/data/processed/input_articles.json` (within the container).
+
+This means indexing usually happens automatically the first time the backend starts with an empty database.
+
+**Manual Indexing (Optional):**
+You might want to run the indexer manually for specific reasons (e.g., re-indexing with different parameters, using a different input file, or running outside Docker).
+
+**Via Docker Compose:**
 Make sure your input JSON file (e.g., `../data/processed/input_articles.json`) is ready. Run the following from the main `Chatbot` directory:
 ```bash
 docker-compose run --rm backend python app/scripts/index_to_chroma.py --input data/processed/input_articles.json --chroma-host chromadb
@@ -93,7 +104,7 @@ The backend uses the following environment variables (typically set via a `.env`
 | `CHROMADB_PORT` | ChromaDB server port | `8000` | Yes |
 | `COLLECTION_NAME` | ChromaDB collection name | `iwac_articles` | Yes |
 | `EMBEDDING_MODEL_NAME` | SentenceTransformer model | `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` | Yes |
-| `MODEL_NAME` | Default LLM model to use | `gemma3:4b` | Yes |
+| `MODEL_NAME` | Default LLM model ID to use if not specified in the query. The actual default fallback might also be influenced by the `default_model` field in `model_configs.json`. | `gemma3:4b` | Yes |
 | `OLLAMA_BASE_URL` | URL for Ollama API | `http://ollama:11434` | Only if using Ollama |
 | `GEMINI_API_KEY` | API key for Google Gemini | - | Only if using Gemini |
 | `OPENAI_API_KEY` | API key for OpenAI | - | Only if using OpenAI |
@@ -113,7 +124,8 @@ To add a new model to the system:
      "temperature": 0.1,
      "options": {
        "param1": "value1",
-       "param2": "value2"
+       "maxOutputTokens": 4096,
+       "thinkingBudget": 16384
      }
    }
    ```
@@ -133,10 +145,12 @@ Handles user questions using the RAG process. The workflow aims to balance preci
 2.  **Metadata Transfer:** The metadata (including article IDs) of these top-matching chunks is passed to the `ModelManager`.
 3.  **Full Article Selection:** The `ModelManager` identifies the unique articles these chunks belong to and selects the top-ranked ones.
 4.  **Context Building (Full Article):** The `ModelManager` retrieves the *complete text* of the selected articles from its in-memory store.
-5.  **Token-Aware Concatenation:** It carefully combines the full text of these articles, adding one article at a time until the context nears the token limit of the chosen LLM.
+5.  **Token-Aware Concatenation:** It carefully combines the full text of these articles, adding one article at a time until the context nears the token limit of the chosen LLM (reserving space for the prompt structure and expected output).
 6.  **LLM Prompting:** The final prompt, containing the user query and the concatenated *full article texts* as context, is sent to the LLM for answer generation.
+7.  **Response Generation:** The LLM generates the answer based *only* on the provided context. The backend returns the answer, source snippets (from the initial chunks), query time, and the number of tokens used in the final prompt sent to the LLM.
 
 *Note:* For models with large context windows, the system retrieves more initial chunks (step 1) to provide a wider selection of potentially relevant articles for step 3.
+*Limitation:* Filtering by `locations` and `subjects` in the initial retrieval (step 1) is currently limited because these fields are stored as JSON strings in the metadata. The filtering logic in `api.py` currently bypasses these fields in the database query.
 
 **Request:**
 ```json
@@ -167,7 +181,8 @@ Handles user questions using the RAG process. The workflow aims to balance preci
       "text_snippet": "The conference hall in Dakar buzzed with activity..."
     }
   ],
-  "query_time": 1.25
+  "query_time": 1.25,
+  "prompt_token_count": 3850
 }
 ```
 
@@ -248,9 +263,10 @@ Each provider handles:
    - For Ollama: Ensure Ollama service is running and models are downloaded
    - For Gemini/OpenAI/Anthropic: Verify the respective API key (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) is correctly set in `.env`.
    - Check `MODEL_NAME` matches an existing model in your provider
+   - Ensure the installed version of the provider's SDK (e.g., `google-generativeai`) supports all configured options (like `thinkingBudget`/`ThinkingConfig`). If not, update the library or remove the unsupported option from `model_configs.json`.
 
 3. **Missing NLTK Data**:
-   - If running outside Docker, ensure you've downloaded NLTK data:
+   - This should be handled by the `Dockerfile`. If you encounter errors locally, ensure NLTK data is downloaded:
      ```python
      python -m nltk.downloader punkt
      ```
