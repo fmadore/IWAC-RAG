@@ -215,12 +215,12 @@ export function saveConversationAsHtml(messages: ChatMessage[], lastSources: Sou
 					</p>
 					<p class="source-snippet">"${escapeHtml(source.text_snippet)}"</p>
 					<a 
-						href="${escapeHtml(source.url && source.url.trim() !== '' ? source.url : `https://islam.zmo.de/s/afrique_ouest/item/${source.id}`)}" 
+						href="${escapeHtml(source.url && source.url.trim() !== '' ? source.url : `https://islam.zmo.de/s/afrique_ouest/item/${source.id.split('_').pop()}`)}" 
 						target="_blank" 
 						rel="noopener noreferrer" 
 						class="source-link"
 					>
-						${source.url && source.url.trim() !== '' ? 'View Original Source' : `View on ZMO Database (ID: ${source.id})`}
+						${source.url && source.url.trim() !== '' ? 'View Original Source' : `View on Collection Islam Afrique de l'Ouest (ID: ${source.id})`}
 					</a>
 				</div>
 			`).join('')}
