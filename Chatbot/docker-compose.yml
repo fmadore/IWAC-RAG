@@ -18,10 +18,9 @@ services:
     # image: ghcr.io/chroma-core/chroma:latest # Build from local Dockerfile instead
     build: ./chromadb
     volumes:
-      - chroma_data:/chroma/data
+      - chroma_data:/data
     environment:
       - CHROMA_DB_IMPL=duckdb+parquet
-      - PERSIST_DIRECTORY=/chroma/data
       # Add ANONYMIZED_TELEMETRY=False if you want to disable telemetry
       # - ANONYMIZED_TELEMETRY=False 
     ports:
